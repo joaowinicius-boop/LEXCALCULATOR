@@ -2,8 +2,8 @@ import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { fmt } from '../utils/calcular.js'
 import {
-  Search, Plus, CheckCircle2, Clock, ChevronUp, ChevronDown,
-  ArrowRight, Download
+  Search, Plus, CheckCircle2, Clock,
+  ChevronUp, ChevronDown, ArrowRight
 } from 'lucide-react'
 
 const TODOS = [
@@ -22,16 +22,30 @@ const TODOS = [
 ]
 
 function Badge({ status }) {
-  if (status === 'concluido')
-    return <span className="badge-green"><CheckCircle2 size={10} />Pago</span>
-  return <span className="badge-yellow"><Clock size={10} />Pendente</span>
+  if (status === 'concluido') return <span className="badge badge-success"><CheckCircle2 size={10} />Pago</span>
+  return <span className="badge badge-warning"><Clock size={10} />Pendente</span>
+}
+
+function TipoDocBadge({ tipo }) {
+  const isAcordao = tipo === 'Acórdão'
+  return (
+    <span style={{
+      background: isAcordao ? 'hsl(var(--primary) / 0.1)' : 'hsl(var(--secondary))',
+      border: `1px solid ${isAcordao ? 'hsl(var(--primary) / 0.25)' : 'hsl(var(--border))'}`,
+      color: isAcordao ? 'hsl(var(--primary))' : 'hsl(var(--muted-foreground))',
+      borderRadius: '8px',
+      padding: '2px 8px',
+      fontSize: '12px',
+      fontWeight: 500,
+    }}>{tipo}</span>
+  )
 }
 
 export default function Historico() {
   const navigate = useNavigate()
-  const [busca,   setBusca]   = useState('')
-  const [filtro,  setFiltro]  = useState('todos')
-  const [sort,    setSort]    = useState({ col: 'data', dir: 'desc' })
+  const [busca,  setBusca]  = useState('')
+  const [filtro, setFiltro] = useState('todos')
+  const [sort,   setSort]   = useState({ col: 'data', dir: 'desc' })
 
   const filtered = TODOS
     .filter(c => {
@@ -54,96 +68,92 @@ export default function Historico() {
   function SortIcon({ col }) {
     if (sort.col !== col) return <ChevronUp size={11} style={{ opacity: 0.2 }} />
     return sort.dir === 'asc'
-      ? <ChevronUp size={11} style={{ color: 'var(--gold)' }} />
-      : <ChevronDown size={11} style={{ color: 'var(--gold)' }} />
+      ? <ChevronUp size={11} style={{ color: 'hsl(var(--primary))' }} />
+      : <ChevronDown size={11} style={{ color: 'hsl(var(--primary))' }} />
   }
 
-  const totalPendente  = filtered.filter(c => c.status === 'pendente').reduce((a,c) => a + c.total, 0)
-  const totalConcluido = filtered.filter(c => c.status === 'concluido').reduce((a,c) => a + c.total, 0)
+  const totalPend = filtered.filter(c => c.status === 'pendente').reduce((a, c) => a + c.total, 0)
+  const totalConc = filtered.filter(c => c.status === 'concluido').reduce((a, c) => a + c.total, 0)
+
+  const thSort = (col, label) => (
+    <th onClick={() => toggleSort(col)} style={{ cursor: 'pointer', userSelect: 'none' }}>
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px' }}>
+        {label} <SortIcon col={col} />
+      </span>
+    </th>
+  )
 
   return (
-    <div style={{ padding: '2rem', maxWidth: '1200px' }}>
+    <div style={{ padding: '32px 24px', maxWidth: '1200px' }}>
 
       {/* Header */}
-      <div className="fade-up" style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: '1rem', marginBottom: '1.5rem', flexWrap: 'wrap' }}>
+      <div className="fade-up" style={{ display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: '16px', marginBottom: '24px', flexWrap: 'wrap' }}>
         <div>
-          <h1 className="cinzel" style={{ margin: 0, fontSize: '1.4rem', color: 'var(--text)', fontWeight: 700 }}>
-            <span style={{ color: 'var(--gold)' }}>§</span> Histórico de Cálculos
+          <p style={{ margin: '0 0 4px', fontSize: '11px', fontWeight: 500, letterSpacing: '1.54px', textTransform: 'uppercase', color: 'hsl(var(--muted-foreground))' }}>
+            EXECUÇÃO · HISTÓRICO
+          </p>
+          <h1 style={{ margin: '0 0 4px', fontSize: '24px', fontWeight: 700, color: 'hsl(var(--foreground))' }}>
+            Histórico de Cálculos
           </h1>
-          <p style={{ margin: '0.3rem 0 0', fontSize: '0.82rem', color: 'var(--text-muted)' }}>
-            {TODOS.length} cálculos no total
+          <p style={{ margin: 0, fontSize: '14px', color: 'hsl(var(--muted-foreground))' }}>
+            {TODOS.length} cálculos registrados no sistema
           </p>
         </div>
-        <button className="btn-gold" onClick={() => navigate('/novo')}>
-          <Plus size={15} />
-          Novo Cálculo
+        <button className="btn-primary" onClick={() => navigate('/novo')} style={{ height: '40px', fontSize: '13px' }}>
+          <Plus size={15} /> Novo Cálculo
         </button>
       </div>
 
-      {/* Summary cards */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '1rem', marginBottom: '1.5rem' }}>
-        <div className="card fade-up" style={{ padding: '1rem 1.25rem' }}>
-          <p style={{ margin: 0, fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Em aberto</p>
-          <p className="mono" style={{ margin: '0.3rem 0 0', fontSize: '1.3rem', fontWeight: 600, color: 'var(--gold-light)' }}>{fmt(totalPendente)}</p>
-          <p style={{ margin: '0.2rem 0 0', fontSize: '0.72rem', color: 'var(--text-muted)' }}>{filtered.filter(c=>c.status==='pendente').length} processos</p>
-        </div>
-        <div className="card fade-up" style={{ padding: '1rem 1.25rem' }}>
-          <p style={{ margin: 0, fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Recebido</p>
-          <p className="mono" style={{ margin: '0.3rem 0 0', fontSize: '1.3rem', fontWeight: 600, color: '#4ADE80' }}>{fmt(totalConcluido)}</p>
-          <p style={{ margin: '0.2rem 0 0', fontSize: '0.72rem', color: 'var(--text-muted)' }}>{filtered.filter(c=>c.status==='concluido').length} processos</p>
-        </div>
-        <div className="card fade-up" style={{ padding: '1rem 1.25rem' }}>
-          <p style={{ margin: 0, fontSize: '0.7rem', color: 'var(--text-muted)', textTransform: 'uppercase', letterSpacing: '0.08em' }}>Total geral</p>
-          <p className="mono" style={{ margin: '0.3rem 0 0', fontSize: '1.3rem', fontWeight: 600, color: 'var(--text)' }}>{fmt(totalPendente + totalConcluido)}</p>
-          <p style={{ margin: '0.2rem 0 0', fontSize: '0.72rem', color: 'var(--text-muted)' }}>{filtered.length} mostrados</p>
-        </div>
+      {/* Summary */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: '16px', marginBottom: '20px' }}>
+        {[
+          { label: 'Em Aberto',   value: fmt(totalPend), sub: `${filtered.filter(c=>c.status==='pendente').length} processos`,  color: 'var(--warning)' },
+          { label: 'Recebido',    value: fmt(totalConc), sub: `${filtered.filter(c=>c.status==='concluido').length} processos`, color: 'var(--success)' },
+          { label: 'Total Geral', value: fmt(totalPend + totalConc), sub: `${filtered.length} mostrados`,                       color: 'hsl(var(--foreground))' },
+        ].map((s, i) => (
+          <div key={s.label} className="card fade-up" style={{ padding: '16px 20px', animationDelay: `${i * 0.05}s`, opacity: 0 }}>
+            <p className="kpi-label">{s.label}</p>
+            <p className="mono kpi-value" style={{ fontSize: '20px', color: s.color, margin: '4px 0 2px' }}>{s.value}</p>
+            <p className="kpi-sub">{s.sub}</p>
+          </div>
+        ))}
       </div>
 
-      {/* Filters */}
-      <div className="card fade-up" style={{ marginBottom: '0' }}>
+      {/* Table card */}
+      <div className="card fade-up stagger-3">
+        {/* Filters */}
         <div style={{
-          padding: '1rem 1.25rem',
-          borderBottom: '1px solid var(--border)',
+          padding: '14px 16px',
+          borderBottom: '1px solid hsl(var(--border))',
           display: 'flex',
-          gap: '0.75rem',
+          gap: '10px',
           alignItems: 'center',
           flexWrap: 'wrap',
         }}>
           {/* Search */}
-          <div style={{ position: 'relative', flex: '1', minWidth: '200px' }}>
-            <Search size={14} style={{ position: 'absolute', left: '0.75rem', top: '50%', transform: 'translateY(-50%)', color: 'var(--text-muted)' }} />
+          <div style={{ position: 'relative', flex: 1, minWidth: '220px' }}>
+            <Search size={14} style={{
+              position: 'absolute', left: '12px', top: '50%',
+              transform: 'translateY(-50%)',
+              color: 'hsl(var(--muted-foreground))',
+              pointerEvents: 'none',
+            }} />
             <input
-              className="input-gold"
-              style={{ paddingLeft: '2.25rem' }}
+              className="input-lex input-icon"
               placeholder="Buscar por cliente, processo ou executada..."
               value={busca}
               onChange={e => setBusca(e.target.value)}
             />
           </div>
 
-          {/* Status filter */}
-          <div style={{ display: 'flex', gap: '0.375rem' }}>
+          {/* Segmented control */}
+          <div className="seg-ctrl">
             {[
-              { v: 'todos',    l: 'Todos'    },
-              { v: 'pendente', l: 'Pendente' },
-              { v: 'concluido',l: 'Pago'     },
+              { v: 'todos',     l: `Todos ${TODOS.length}`   },
+              { v: 'pendente',  l: `Pendente ${TODOS.filter(c=>c.status==='pendente').length}` },
+              { v: 'concluido', l: `Pago ${TODOS.filter(c=>c.status==='concluido').length}`    },
             ].map(f => (
-              <button
-                key={f.v}
-                onClick={() => setFiltro(f.v)}
-                style={{
-                  padding: '0.45rem 0.875rem',
-                  borderRadius: '99px',
-                  border: `1px solid ${filtro === f.v ? 'var(--gold)' : 'var(--border)'}`,
-                  background: filtro === f.v ? 'rgba(201,168,76,0.1)' : 'transparent',
-                  color: filtro === f.v ? 'var(--gold)' : 'var(--text-muted)',
-                  fontSize: '0.78rem',
-                  cursor: 'pointer',
-                  transition: 'all 0.12s',
-                  fontFamily: 'Outfit, sans-serif',
-                  whiteSpace: 'nowrap',
-                }}
-              >
+              <button key={f.v} className={`seg-btn${filtro === f.v ? ' active' : ''}`} onClick={() => setFiltro(f.v)}>
                 {f.l}
               </button>
             ))}
@@ -153,76 +163,63 @@ export default function Historico() {
         {/* Table */}
         <div style={{ overflowX: 'auto' }}>
           {filtered.length === 0 ? (
-            <div style={{ padding: '3rem', textAlign: 'center', color: 'var(--text-muted)' }}>
-              <Search size={32} style={{ marginBottom: '0.75rem', opacity: 0.3 }} />
-              <p style={{ margin: 0 }}>Nenhum resultado encontrado</p>
+            <div style={{ padding: '48px', textAlign: 'center', color: 'hsl(var(--muted-foreground))' }}>
+              <Search size={28} style={{ marginBottom: '10px', opacity: 0.3 }} />
+              <p style={{ margin: 0, fontSize: '14px' }}>Nenhum resultado encontrado</p>
             </div>
           ) : (
             <table className="tbl">
               <thead>
                 <tr>
-                  <th onClick={() => toggleSort('id')} style={{ cursor: 'pointer', userSelect: 'none' }}>
-                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>Processo <SortIcon col="id" /></span>
-                  </th>
-                  <th onClick={() => toggleSort('cliente')} style={{ cursor: 'pointer', userSelect: 'none' }}>
-                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>Cliente <SortIcon col="cliente" /></span>
-                  </th>
+                  {thSort('id', 'Processo')}
+                  {thSort('cliente', 'Cliente')}
                   <th>Executada</th>
-                  <th>Doc. Base</th>
+                  <th>Doc.</th>
                   <th style={{ textAlign: 'center' }}>Verbas</th>
-                  <th onClick={() => toggleSort('total')} style={{ cursor: 'pointer', userSelect: 'none', textAlign: 'right' }}>
-                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem', justifyContent: 'flex-end' }}>Total <SortIcon col="total" /></span>
+                  <th style={{ textAlign: 'right', cursor: 'pointer', userSelect: 'none' }}
+                    onClick={() => toggleSort('total')}>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '4px', justifyContent: 'flex-end' }}>
+                      Total <SortIcon col="total" />
+                    </span>
                   </th>
                   <th>Status</th>
-                  <th onClick={() => toggleSort('data')} style={{ cursor: 'pointer', userSelect: 'none' }}>
-                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '0.25rem' }}>Data <SortIcon col="data" /></span>
-                  </th>
+                  {thSort('data', 'Data')}
                   <th></th>
                 </tr>
               </thead>
               <tbody>
                 {filtered.map((c, i) => (
-                  <tr key={c.id} style={{ animation: `fadeUp 0.3s ease ${i * 0.03}s forwards`, opacity: 0 }}>
+                  <tr key={c.id} style={{ animation: `fadeUp 0.3s ease ${i * 0.025}s forwards`, opacity: 0 }}>
                     <td>
-                      <span className="mono" style={{ fontSize: '0.72rem', color: 'var(--text-muted)' }}>
-                        {c.id.substring(0, 13)}...
+                      <span className="mono" style={{ fontSize: '12px', color: 'hsl(var(--muted-foreground))' }}>
+                        {c.id.substring(0, 14)}…
                       </span>
                     </td>
-                    <td style={{ fontWeight: 500, maxWidth: '220px' }}>
-                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'block' }}>{c.cliente}</span>
+                    <td style={{ fontWeight: 500, maxWidth: '220px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                      {c.cliente}
                     </td>
-                    <td style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>{c.executada}</td>
-                    <td>
-                      <span style={{
-                        background: c.tipoDoc === 'Acórdão' ? 'rgba(59,111,240,0.1)' : 'var(--bg-elevated)',
-                        border: `1px solid ${c.tipoDoc === 'Acórdão' ? 'rgba(59,111,240,0.25)' : 'var(--border)'}`,
-                        color: c.tipoDoc === 'Acórdão' ? '#7BA7F7' : 'var(--text-muted)',
-                        borderRadius: '4px',
-                        padding: '0.15rem 0.5rem',
-                        fontSize: '0.7rem',
-                        fontWeight: 500,
-                      }}>
-                        {c.tipoDoc}
-                      </span>
-                    </td>
-                    <td style={{ textAlign: 'center' }}>
-                      <span style={{ fontSize: '0.8rem', color: 'var(--text-muted)' }}>{c.verbas}</span>
-                    </td>
+                    <td style={{ color: 'hsl(var(--muted-foreground))', fontSize: '13px' }}>{c.executada}</td>
+                    <td><TipoDocBadge tipo={c.tipoDoc} /></td>
+                    <td style={{ textAlign: 'center', color: 'hsl(var(--muted-foreground))', fontSize: '13px' }}>{c.verbas}</td>
                     <td style={{ textAlign: 'right' }}>
-                      <span className="mono" style={{ color: 'var(--gold)', fontWeight: 600 }}>{fmt(c.total)}</span>
+                      <span className="mono" style={{ fontWeight: 600, color: 'hsl(var(--primary))', fontSize: '13px' }}>
+                        {fmt(c.total)}
+                      </span>
                     </td>
                     <td><Badge status={c.status} /></td>
-                    <td style={{ color: 'var(--text-muted)', fontSize: '0.8rem', whiteSpace: 'nowrap' }}>{c.data}</td>
+                    <td style={{ color: 'hsl(var(--muted-foreground))', fontSize: '13px', whiteSpace: 'nowrap' }}>{c.data}</td>
                     <td>
                       <button
                         onClick={() => navigate('/novo')}
                         style={{
                           background: 'transparent', border: 'none', cursor: 'pointer',
-                          color: 'var(--text-dim)', padding: '0.25rem', borderRadius: '4px',
-                          transition: 'color 0.1s', display: 'flex', alignItems: 'center',
+                          color: 'hsl(var(--muted-foreground))',
+                          padding: '4px', borderRadius: '6px',
+                          display: 'flex', alignItems: 'center',
+                          transition: 'color 0.1s',
                         }}
-                        onMouseEnter={e => e.currentTarget.style.color = 'var(--gold)'}
-                        onMouseLeave={e => e.currentTarget.style.color = 'var(--text-dim)'}
+                        onMouseEnter={e => e.currentTarget.style.color = 'hsl(var(--primary))'}
+                        onMouseLeave={e => e.currentTarget.style.color = 'hsl(var(--muted-foreground))'}
                       >
                         <ArrowRight size={14} />
                       </button>
@@ -234,15 +231,13 @@ export default function Historico() {
           )}
         </div>
 
-        {/* Footer */}
         <div style={{
-          padding: '0.875rem 1.25rem',
-          borderTop: '1px solid var(--border)',
-          fontSize: '0.75rem',
-          color: 'var(--text-muted)',
+          padding: '12px 16px',
+          borderTop: '1px solid hsl(var(--border))',
           display: 'flex',
           justifyContent: 'space-between',
-          alignItems: 'center',
+          fontSize: '12px',
+          color: 'hsl(var(--muted-foreground))',
         }}>
           <span>{filtered.length} de {TODOS.length} registros</span>
           <span>Dados demonstrativos</span>

@@ -3,7 +3,7 @@ import { useAuth } from '../contexts/AuthContext.jsx'
 import { fmt } from '../utils/calcular.js'
 import {
   Calculator, TrendingUp, Clock, CheckCircle2,
-  ArrowRight, FileText, Plus, ChevronRight
+  ArrowRight, Plus, ChevronRight, BarChart3, Scale
 } from 'lucide-react'
 
 const MOCK = [
@@ -13,36 +13,40 @@ const MOCK = [
   { id: '0011339-45.2025.8.04.3101', cliente: 'Claudia Nayara Lira Lemos',          executada: 'Banco Bradesco S/A', data: '10/04/2026', total: 6838.49,   status: 'pendente',  verbas: 9  },
   { id: '0017435-21.2025.8.04.3101', cliente: 'Zeildo Almeida Freitas',             executada: 'Banco Bradesco S/A', data: '01/04/2026', total: 30974.44,  status: 'pendente',  verbas: 7  },
   { id: '0023358-91.2025.8.04.1000', cliente: 'Alexandre Luis Barbosa Nogueira',    executada: 'Banco Bradesco S/A', data: '25/03/2026', total: 2579.95,   status: 'concluido', verbas: 6  },
-  { id: '0014264-76.2025.8.04.3101', cliente: 'Acrimilson Barros Martins',          executada: 'Banco Bradesco S/A', data: '18/03/2026', total: 14264.76,  status: 'pendente',  verbas: 7  },
-  { id: '0026479-18.2024.8.04.1000', cliente: 'Adair Lima Oliveira',                executada: 'Banco Bradesco S/A', data: '10/03/2026', total: 26479.18,  status: 'concluido', verbas: 7  },
 ]
 
 function Badge({ status }) {
-  if (status === 'concluido') return <span className="badge-green"><CheckCircle2 size={10} />Pago</span>
-  return <span className="badge-yellow"><Clock size={10} />Pendente</span>
+  if (status === 'concluido')
+    return <span className="badge badge-success"><CheckCircle2 size={10} />Pago</span>
+  return <span className="badge badge-warning"><Clock size={10} />Pendente</span>
 }
 
-function StatCard({ icon: Icon, label, value, sub, accent }) {
+function KpiCard({ icon: Icon, label, value, sub, accent, delay }) {
   return (
-    <div className="card fade-up" style={{ padding: '1.25rem 1.5rem' }}>
-      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '0.875rem' }}>
-        <p style={{ margin: 0, fontSize: '0.72rem', fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'var(--text-muted)' }}>
-          {label}
-        </p>
+    <div className="card fade-up" style={{
+      padding: '20px',
+      animationDelay: delay,
+      opacity: 0,
+    }}>
+      <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', marginBottom: '12px' }}>
+        <p className="kpi-label">{label}</p>
         <div style={{
           width: '32px', height: '32px',
           borderRadius: '8px',
-          background: accent ? 'rgba(201,168,76,0.12)' : 'var(--bg-elevated)',
-          border: `1px solid ${accent ? 'rgba(201,168,76,0.2)' : 'var(--border)'}`,
+          background: accent ? 'hsl(var(--primary) / 0.12)' : 'hsl(var(--secondary))',
+          border: `1px solid ${accent ? 'hsl(var(--primary) / 0.25)' : 'hsl(var(--border))'}`,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
         }}>
-          <Icon size={15} color={accent ? 'var(--gold)' : 'var(--text-muted)'} />
+          <Icon size={15} color={accent ? 'hsl(var(--primary))' : 'hsl(var(--muted-foreground))'} />
         </div>
       </div>
-      <p className="mono" style={{ margin: 0, fontSize: '1.6rem', fontWeight: 600, color: accent ? 'var(--gold)' : 'var(--text)', lineHeight: 1 }}>
+      <p className={`kpi-value${accent ? ' mono' : ''}`} style={{
+        color: accent ? 'hsl(var(--primary))' : 'hsl(var(--foreground))',
+        fontSize: accent ? '28px' : '36px',
+      }}>
         {value}
       </p>
-      {sub && <p style={{ margin: '0.35rem 0 0', fontSize: '0.75rem', color: 'var(--text-muted)' }}>{sub}</p>}
+      {sub && <p className="kpi-sub">{sub}</p>}
     </div>
   )
 }
@@ -59,49 +63,51 @@ export default function Dashboard() {
   const valorPend    = pendentes.reduce((a, c) => a + c.total, 0)
   const concluidos   = MOCK.filter(c => c.status === 'concluido').length
 
-  const dataHoje = new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' })
-
   return (
-    <div style={{ padding: '2rem', maxWidth: '1200px' }}>
+    <div style={{ padding: '32px 24px', maxWidth: '1200px' }}>
 
-      {/* Header */}
-      <div className="fade-up" style={{ marginBottom: '2rem', display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: '1rem', flexWrap: 'wrap' }}>
-        <div>
-          <p style={{ margin: 0, fontSize: '0.75rem', color: 'var(--text-muted)', letterSpacing: '0.05em', textTransform: 'capitalize' }}>{dataHoje}</p>
-          <h1 className="cinzel" style={{ margin: '0.25rem 0 0', fontSize: '1.5rem', fontWeight: 700, color: 'var(--text)' }}>
-            {saudacao}, <span style={{ color: 'var(--gold)' }}>{user?.name?.split(' ')[0]}</span>
-          </h1>
-          <p style={{ margin: '0.25rem 0 0', fontSize: '0.875rem', color: 'var(--text-muted)' }}>
-            {MOCK.length} cálculos no sistema • {pendentes.length} aguardando pagamento
-          </p>
-        </div>
-        <button className="btn-gold" onClick={() => navigate('/novo')}>
-          <Plus size={15} />
-          Novo Cálculo
-        </button>
+      {/* Page header */}
+      <div className="fade-up" style={{ marginBottom: '28px' }}>
+        <p style={{ margin: '0 0 4px', fontSize: '11px', fontWeight: 500, letterSpacing: '1.54px', textTransform: 'uppercase', color: 'hsl(var(--muted-foreground))' }}>
+          ANÁLISES · VISÃO GERAL
+        </p>
+        <h1 style={{ margin: '0 0 6px', fontSize: '24px', fontWeight: 700, color: 'hsl(var(--foreground))' }}>
+          {saudacao}, {user?.name?.split(' ')[0]} 👋
+        </h1>
+        <p style={{ margin: 0, fontSize: '14px', color: 'hsl(var(--muted-foreground))' }}>
+          {MOCK.length} cálculos no sistema • {pendentes.length} processos aguardando pagamento
+        </p>
       </div>
 
-      {/* Stats */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '1rem', marginBottom: '2rem' }}>
-        <StatCard icon={Calculator}   label="Total de Cálculos"   value={MOCK.length}         sub="neste sistema"               accent={false} />
-        <StatCard icon={TrendingUp}   label="Valor Total"         value={fmt(totalValor)}     sub="em execuções abertas + pagas" accent={true}  />
-        <StatCard icon={Clock}        label="Aguardando Pagamento" value={pendentes.length}    sub={fmt(valorPend) + ' pendente'} accent={false} />
-        <StatCard icon={CheckCircle2} label="Concluídos"          value={concluidos}           sub="pagamentos recebidos"         accent={false} />
+      {/* KPI grid */}
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '16px', marginBottom: '28px' }}>
+        <KpiCard icon={Calculator}   label="Total de Cálculos"      value={MOCK.length}        sub="neste sistema"                  accent={false} delay="0.05s" />
+        <KpiCard icon={TrendingUp}   label="Valor Total em Execução" value={fmt(totalValor)}    sub="abertos + pagos"                accent={true}  delay="0.10s" />
+        <KpiCard icon={Clock}        label="Aguardando Pagamento"    value={pendentes.length}   sub={fmt(valorPend) + ' pendente'}  accent={false} delay="0.15s" />
+        <KpiCard icon={CheckCircle2} label="Processos Pagos"         value={concluidos}          sub="pagamentos confirmados"         accent={false} delay="0.20s" />
       </div>
 
       {/* Recent table */}
-      <div className="card fade-up stagger-3">
-        <div style={{ padding: '1.25rem 1.5rem', borderBottom: '1px solid var(--border)', display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+      <div className="card fade-up stagger-3" style={{ marginBottom: '20px' }}>
+        <div style={{
+          padding: '16px 20px',
+          borderBottom: '1px solid hsl(var(--border))',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          flexWrap: 'wrap',
+          gap: '12px',
+        }}>
           <div>
-            <h2 className="cinzel" style={{ margin: 0, fontSize: '0.95rem', color: 'var(--text)', fontWeight: 600 }}>Cálculos Recentes</h2>
-            <p style={{ margin: '0.2rem 0 0', fontSize: '0.75rem', color: 'var(--text-muted)' }}>Últimos cumprimentos de sentença elaborados</p>
+            <p style={{ margin: 0, fontSize: '11px', fontWeight: 500, letterSpacing: '1.54px', textTransform: 'uppercase', color: 'hsl(var(--muted-foreground))' }}>
+              COMERCIAL
+            </p>
+            <h2 style={{ margin: '2px 0 0', fontSize: '16px', fontWeight: 600, color: 'hsl(var(--foreground))' }}>
+              Cálculos Recentes
+            </h2>
           </div>
-          <button
-            className="btn-outline"
-            onClick={() => navigate('/historico')}
-            style={{ fontSize: '0.78rem', padding: '0.45rem 1rem' }}
-          >
-            Ver todos <ChevronRight size={13} />
+          <button className="btn-secondary" onClick={() => navigate('/historico')} style={{ fontSize: '13px' }}>
+            Ver todos <ChevronRight size={14} />
           </button>
         </div>
 
@@ -112,7 +118,7 @@ export default function Dashboard() {
                 <th>Processo</th>
                 <th>Cliente</th>
                 <th>Executada</th>
-                <th>Verbas</th>
+                <th style={{ textAlign: 'center' }}>Verbas</th>
                 <th style={{ textAlign: 'right' }}>Valor Total</th>
                 <th>Status</th>
                 <th>Data</th>
@@ -120,30 +126,36 @@ export default function Dashboard() {
               </tr>
             </thead>
             <tbody>
-              {MOCK.slice(0, 6).map((c, i) => (
-                <tr key={c.id} style={{ animationDelay: `${i * 0.04}s` }}>
+              {MOCK.map((c, i) => (
+                <tr key={c.id} style={{ animation: `fadeUp 0.3s ease ${i * 0.04}s forwards`, opacity: 0 }}>
                   <td>
-                    <span className="mono" style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>{c.id.split('-')[0]}-{c.id.split('-')[1].substring(0, 2)}...</span>
+                    <span className="mono" style={{ fontSize: '12px', color: 'hsl(var(--muted-foreground))' }}>
+                      {c.id.split('-')[0]}-{c.id.split('-')[1].substring(0,4)}…
+                    </span>
                   </td>
-                  <td style={{ fontWeight: 500 }}>{c.cliente}</td>
-                  <td style={{ color: 'var(--text-muted)', fontSize: '0.82rem' }}>{c.executada}</td>
-                  <td>
+                  <td style={{ fontWeight: 500, maxWidth: '200px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                    {c.cliente}
+                  </td>
+                  <td style={{ color: 'hsl(var(--muted-foreground))', fontSize: '13px' }}>{c.executada}</td>
+                  <td style={{ textAlign: 'center' }}>
                     <span style={{
-                      background: 'var(--bg-elevated)',
-                      border: '1px solid var(--border)',
-                      borderRadius: '4px',
-                      padding: '0.15rem 0.5rem',
-                      fontSize: '0.72rem',
-                      color: 'var(--text-muted)',
+                      background: 'hsl(var(--secondary))',
+                      border: '1px solid hsl(var(--border))',
+                      borderRadius: '8px',
+                      padding: '2px 8px',
+                      fontSize: '12px',
+                      color: 'hsl(var(--muted-foreground))',
                     }}>
-                      {c.verbas} verb.
+                      {c.verbas}
                     </span>
                   </td>
                   <td style={{ textAlign: 'right' }}>
-                    <span className="mono" style={{ color: 'var(--gold)', fontWeight: 600 }}>{fmt(c.total)}</span>
+                    <span className="mono" style={{ fontWeight: 600, color: 'hsl(var(--primary))', fontSize: '13px' }}>
+                      {fmt(c.total)}
+                    </span>
                   </td>
                   <td><Badge status={c.status} /></td>
-                  <td style={{ color: 'var(--text-muted)', fontSize: '0.8rem' }}>{c.data}</td>
+                  <td style={{ color: 'hsl(var(--muted-foreground))', fontSize: '13px', whiteSpace: 'nowrap' }}>{c.data}</td>
                   <td>
                     <button
                       onClick={() => navigate('/novo')}
@@ -151,15 +163,15 @@ export default function Dashboard() {
                         background: 'transparent',
                         border: 'none',
                         cursor: 'pointer',
-                        color: 'var(--text-dim)',
-                        padding: '0.25rem',
-                        borderRadius: '4px',
-                        transition: 'color 0.1s',
+                        color: 'hsl(var(--muted-foreground))',
+                        padding: '4px',
+                        borderRadius: '6px',
                         display: 'flex',
                         alignItems: 'center',
+                        transition: 'color 0.1s',
                       }}
-                      onMouseEnter={e => e.currentTarget.style.color = 'var(--gold)'}
-                      onMouseLeave={e => e.currentTarget.style.color = 'var(--text-dim)'}
+                      onMouseEnter={e => e.currentTarget.style.color = 'hsl(var(--primary))'}
+                      onMouseLeave={e => e.currentTarget.style.color = 'hsl(var(--muted-foreground))'}
                     >
                       <ArrowRight size={14} />
                     </button>
@@ -171,9 +183,9 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* Bottom note */}
-      <p style={{ marginTop: '1.5rem', fontSize: '0.72rem', color: 'var(--text-dim)', textAlign: 'center' }}>
-        Índices utilizados: SELIC ~13,75% a.a. • IPCA ~4,83% a.a. • Juros moratórios 1% a.m. (art. 406 CC) — Valores aproximados. Consulte tabela oficial do BACEN.
+      {/* Disclaimer */}
+      <p style={{ fontSize: '11px', color: 'hsl(var(--muted-foreground))', textAlign: 'center', letterSpacing: '0.02em' }}>
+        Índices aproximados — SELIC ~13,75% a.a. • IPCA ~4,83% a.a. • Juros moratórios 1% a.m. (art. 406 CC). Consulte o BACEN para valores oficiais.
       </p>
     </div>
   )

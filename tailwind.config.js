@@ -4,41 +4,40 @@ export default {
   theme: {
     extend: {
       colors: {
-        gold: '#C9A84C',
-        'gold-light': '#E8C96A',
-        'gold-dim': '#5A4820',
-        base: '#0B0D14',
-        surface: '#12151F',
-        elevated: '#1A1E2E',
-        hover: '#222640',
-        border: '#1E2337',
-        'border-light': '#2A3050',
-        'text-muted': '#6B7080',
-        'text-dim': '#3D4257',
+        // LexHub design system
+        background: 'hsl(220 20% 7%)',
+        foreground: 'hsl(220 10% 94%)',
+        primary: {
+          DEFAULT: 'hsl(199 89% 48%)',
+          foreground: '#fff',
+        },
+        card:      'hsl(220 20% 10%)',
+        secondary: 'hsl(220 20% 14%)',
+        muted:     'hsl(220 20% 14%)',
+        'muted-fg':'hsl(220 10% 50%)',
+        border:    'hsl(220 20% 18%)',
+        sidebar:   'hsl(220 20% 5%)',
+        destructive: 'hsl(0 62% 50%)',
+        // Semantic
+        success: 'hsl(150 86% 65%)',
+        warning: 'hsl(46 87% 65%)',
+        info:    'hsl(216 87% 65%)',
+        // Orange accent (badge secondary)
+        orange: 'rgb(249,115,22)',
       },
       fontFamily: {
-        cinzel: ['Cinzel', 'serif'],
-        outfit: ['Outfit', 'sans-serif'],
+        sans: ['Inter', 'system-ui', 'sans-serif'],
         mono: ['"JetBrains Mono"', 'monospace'],
       },
-      animation: {
-        'fade-up': 'fadeUp 0.4s ease forwards',
-        'fade-in': 'fadeIn 0.3s ease forwards',
-        'count-up': 'countUp 0.5s ease forwards',
+      borderRadius: {
+        DEFAULT: '0.75rem',
+        md: '10px',
+        lg: '12px',
       },
-      keyframes: {
-        fadeUp: {
-          from: { opacity: 0, transform: 'translateY(12px)' },
-          to: { opacity: 1, transform: 'translateY(0)' },
-        },
-        fadeIn: {
-          from: { opacity: 0 },
-          to: { opacity: 1 },
-        },
-        countUp: {
-          from: { opacity: 0, transform: 'translateY(6px)' },
-          to: { opacity: 1, transform: 'translateY(0)' },
-        },
+      boxShadow: {
+        card: '0 1px 3px 0 hsl(0 0% 0% / .3), 0 1px 2px -1px hsl(0 0% 0% / .3)',
+        elevated: '0 10px 15px -3px hsl(0 0% 0% / .4), 0 4px 6px -4px hsl(0 0% 0% / .4)',
+        login: '0 25px 50px -12px rgba(0,0,0,0.25)',
       },
     },
   },

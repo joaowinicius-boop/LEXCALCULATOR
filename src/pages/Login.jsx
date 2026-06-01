@@ -1,7 +1,35 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext.jsx'
-import { Scale, AlertCircle, Loader2 } from 'lucide-react'
+import { Scale, Mail, Lock, AlertCircle, Loader2, ChevronRight } from 'lucide-react'
+
+// Decorative dots for left panel
+function DotsGrid() {
+  const dots = []
+  for (let r = 0; r < 8; r++) {
+    for (let c = 0; c < 12; c++) {
+      dots.push(
+        <div key={`${r}-${c}`} style={{
+          width: '3px', height: '3px',
+          borderRadius: '50%',
+          background: 'rgba(255,255,255,0.12)',
+        }} />
+      )
+    }
+  }
+  return (
+    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(12, 3px)', gap: '14px' }}>
+      {dots}
+    </div>
+  )
+}
+
+const FEATURES = [
+  { label: 'SELIC & IPCA automáticos',      sub: 'Correção monetária calculada' },
+  { label: 'Sentença ou acórdão',           sub: 'Suporte a ambos os documentos' },
+  { label: 'Dano moral + material + honorários', sub: 'Todas as verbas em um cálculo' },
+  { label: 'Exporta para petição',          sub: 'Copia tabela formatada em 1 clique' },
+]
 
 export default function Login() {
   const { login } = useAuth()
@@ -26,189 +54,267 @@ export default function Login() {
   }
 
   return (
-    <div className="legal-bg" style={{
+    <div style={{
       minHeight: '100vh',
-      background: 'var(--bg-base)',
       display: 'flex',
-      alignItems: 'center',
-      justifyContent: 'center',
-      padding: '1rem',
-      position: 'relative',
+      background: 'hsl(var(--background))',
     }}>
-      {/* Top gold bar */}
+      {/* ── Left panel ─────────────────────────────────────── */}
       <div style={{
-        position: 'fixed', top: 0, left: 0, right: 0,
-        height: '3px',
-        background: 'linear-gradient(90deg, transparent 0%, var(--gold-dim) 20%, var(--gold) 50%, var(--gold-dim) 80%, transparent 100%)',
-      }} />
+        flex: '0 0 55%',
+        display: 'none', // hidden on mobile; shown via CSS below
+        position: 'relative',
+        overflow: 'hidden',
+        background: 'hsl(220 20% 5%)',
+        borderRight: '1px solid hsl(var(--border))',
+      }}
+      className="left-panel"
+      >
+        {/* Blue glow top-left */}
+        <div style={{
+          position: 'absolute', top: '-100px', left: '-100px',
+          width: '450px', height: '450px',
+          background: 'radial-gradient(circle, hsl(199 89% 48% / 0.18) 0%, transparent 70%)',
+          pointerEvents: 'none',
+        }} />
+        {/* Blue glow bottom-right */}
+        <div style={{
+          position: 'absolute', bottom: '-100px', right: '-80px',
+          width: '350px', height: '350px',
+          background: 'radial-gradient(circle, hsl(217 91% 60% / 0.12) 0%, transparent 70%)',
+          pointerEvents: 'none',
+        }} />
 
-      {/* Background ornamental circles */}
-      <div style={{
-        position: 'fixed', top: '-200px', right: '-200px',
-        width: '500px', height: '500px',
-        borderRadius: '50%',
-        background: 'radial-gradient(circle, rgba(201,168,76,0.04) 0%, transparent 70%)',
-        pointerEvents: 'none',
-      }} />
-      <div style={{
-        position: 'fixed', bottom: '-150px', left: '-150px',
-        width: '400px', height: '400px',
-        borderRadius: '50%',
-        background: 'radial-gradient(circle, rgba(201,168,76,0.03) 0%, transparent 70%)',
-        pointerEvents: 'none',
-      }} />
-
-      <div className="fade-up" style={{ width: '100%', maxWidth: '420px' }}>
-
-        {/* Logo area */}
-        <div style={{ textAlign: 'center', marginBottom: '2rem' }}>
-          <div style={{
-            display: 'inline-flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            width: '64px', height: '64px',
-            borderRadius: '50%',
-            border: '1px solid rgba(201,168,76,0.3)',
-            background: 'var(--bg-elevated)',
-            marginBottom: '1rem',
-          }} className="gold-glow">
-            <span className="cinzel" style={{ color: 'var(--gold)', fontSize: '1.75rem', fontWeight: 700 }}>§</span>
-          </div>
-
-          <h1 className="cinzel" style={{
-            fontSize: '2.25rem',
-            fontWeight: 900,
-            color: 'var(--gold)',
-            letterSpacing: '0.15em',
-            margin: 0,
-            lineHeight: 1,
-          }}>LEX</h1>
-
-          <p className="cinzel" style={{
-            fontSize: '0.75rem',
-            color: 'var(--text-muted)',
-            letterSpacing: '0.45em',
-            marginTop: '0.3rem',
-            marginBottom: '1rem',
-          }}>CALCULATOR</p>
-
-          <div className="gold-divider" />
-
-          <p style={{
-            fontSize: '0.68rem',
-            color: 'var(--text-muted)',
-            letterSpacing: '0.2em',
-            textTransform: 'uppercase',
-            marginTop: '0.75rem',
-          }}>
-            Nicolas Gomes Advogado • OAB/AM 8.926
-          </p>
-        </div>
-
-        {/* Card */}
-        <div className="card" style={{ padding: '2rem' }}>
-          <h2 className="cinzel" style={{
-            fontSize: '1rem',
-            color: 'var(--text)',
-            marginBottom: '1.5rem',
-            letterSpacing: '0.05em',
-          }}>
-            Acesso ao Sistema
-          </h2>
-
-          {erro && (
-            <div style={{
-              background: 'rgba(239,68,68,0.08)',
-              border: '1px solid rgba(239,68,68,0.2)',
-              borderRadius: '6px',
-              padding: '0.75rem 1rem',
-              marginBottom: '1rem',
-              display: 'flex',
-              alignItems: 'flex-start',
-              gap: '0.5rem',
-              fontSize: '0.82rem',
-              color: '#F87171',
-            }}>
-              <AlertCircle size={15} style={{ flexShrink: 0, marginTop: '1px' }} />
-              {erro}
-            </div>
-          )}
-
-          <form onSubmit={handleSubmit}>
-            <div style={{ marginBottom: '1rem' }}>
-              <label style={{
-                display: 'block',
-                fontSize: '0.7rem',
-                fontWeight: 600,
-                letterSpacing: '0.1em',
-                textTransform: 'uppercase',
-                color: 'var(--text-muted)',
-                marginBottom: '0.4rem',
-              }}>E-mail</label>
-              <input
-                type="text"
-                value={email}
-                onChange={e => setEmail(e.target.value)}
-                className="input-gold"
-                placeholder="seu@email.com.br ou admin"
-                required
-                autoFocus
-              />
-            </div>
-
-            <div style={{ marginBottom: '1.5rem' }}>
-              <label style={{
-                display: 'block',
-                fontSize: '0.7rem',
-                fontWeight: 600,
-                letterSpacing: '0.1em',
-                textTransform: 'uppercase',
-                color: 'var(--text-muted)',
-                marginBottom: '0.4rem',
-              }}>Senha</label>
-              <input
-                type="password"
-                value={senha}
-                onChange={e => setSenha(e.target.value)}
-                className="input-gold"
-                placeholder="••••••••"
-                required
-              />
-            </div>
-
-            <button
-              type="submit"
-              disabled={loading}
-              className="btn-gold"
-              style={{ width: '100%', justifyContent: 'center', padding: '0.75rem' }}
-            >
-              {loading
-                ? <><Loader2 size={15} style={{ animation: 'spin 1s linear infinite' }} /> VERIFICANDO...</>
-                : 'ENTRAR'
-              }
-            </button>
-          </form>
-
-          <div style={{ marginTop: '1.5rem', padding: '0.875rem', background: 'var(--bg-elevated)', borderRadius: '6px', border: '1px solid var(--border)' }}>
-            <p style={{ margin: 0, fontSize: '0.72rem', color: 'var(--text-muted)', lineHeight: 1.6 }}>
-              <span style={{ color: 'var(--gold)', fontWeight: 600 }}>Acesso demo:</span><br />
-              E-mail: <span className="mono" style={{ color: 'var(--text)' }}>admin</span> / Senha: <span className="mono" style={{ color: 'var(--text)' }}>admin</span>
-            </p>
-          </div>
-        </div>
-
-        <p style={{
-          textAlign: 'center',
-          fontSize: '0.68rem',
-          color: 'var(--text-dim)',
-          marginTop: '1.5rem',
-          letterSpacing: '0.05em',
+        {/* Content */}
+        <div style={{
+          position: 'relative', zIndex: 1,
+          padding: '48px',
+          height: '100%',
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'space-between',
         }}>
-          LEX CALCULATOR v1.0 — Sistema de Cálculos de Execução
-        </p>
+          {/* Top — logo */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <div style={{
+              width: '40px', height: '40px',
+              background: 'var(--gradient-primary)',
+              borderRadius: '10px',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+              boxShadow: '0 0 16px hsl(var(--primary) / 0.4)',
+            }}>
+              <Scale size={20} color="#fff" />
+            </div>
+            <div>
+              <p style={{ margin: 0, fontWeight: 700, fontSize: '16px', color: 'hsl(var(--foreground))' }}>LEX CALCULATOR</p>
+              <p style={{ margin: 0, fontSize: '12px', color: 'hsl(var(--muted-foreground))' }}>Nicolas Gomes Advogado</p>
+            </div>
+          </div>
+
+          {/* Middle — heading */}
+          <div>
+            <p style={{
+              fontSize: '11px', fontWeight: 600, letterSpacing: '1.5px',
+              textTransform: 'uppercase', color: 'hsl(var(--primary))',
+              marginBottom: '16px',
+            }}>
+              CÁLCULOS DE EXECUÇÃO
+            </p>
+            <h1 style={{
+              fontSize: '36px', fontWeight: 700, lineHeight: 1.25,
+              color: 'hsl(var(--foreground))',
+              margin: '0 0 16px',
+            }}>
+              Cumprimento de<br />Sentença em<br />
+              <span style={{
+                background: 'var(--gradient-primary)',
+                WebkitBackgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
+              }}>segundos.</span>
+            </h1>
+            <p style={{ fontSize: '15px', color: 'hsl(var(--muted-foreground))', lineHeight: 1.6, margin: 0, maxWidth: '380px' }}>
+              Informe os dados da sentença ou acórdão. O sistema calcula automaticamente a correção monetária e os juros.
+            </p>
+
+            {/* Feature list */}
+            <div style={{ marginTop: '32px', display: 'flex', flexDirection: 'column', gap: '12px' }}>
+              {FEATURES.map(f => (
+                <div key={f.label} style={{ display: 'flex', alignItems: 'flex-start', gap: '10px' }}>
+                  <div style={{
+                    width: '20px', height: '20px', borderRadius: '50%',
+                    background: 'hsl(var(--primary) / 0.15)',
+                    border: '1px solid hsl(var(--primary) / 0.3)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    flexShrink: 0, marginTop: '1px',
+                  }}>
+                    <div style={{ width: '6px', height: '6px', borderRadius: '50%', background: 'hsl(var(--primary))' }} />
+                  </div>
+                  <div>
+                    <p style={{ margin: 0, fontSize: '13px', fontWeight: 500, color: 'hsl(var(--foreground))' }}>{f.label}</p>
+                    <p style={{ margin: 0, fontSize: '12px', color: 'hsl(var(--muted-foreground))' }}>{f.sub}</p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Bottom — dots grid */}
+          <div><DotsGrid /></div>
+        </div>
       </div>
 
-      <style>{`@keyframes spin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }`}</style>
+      {/* ── Right panel — login form ─────────────────────────── */}
+      <div style={{
+        flex: 1,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: '24px',
+        minHeight: '100vh',
+      }}>
+        <div className="fade-up" style={{ width: '100%', maxWidth: '400px' }}>
+
+          {/* Mobile logo (hidden on desktop) */}
+          <div className="mobile-logo" style={{ textAlign: 'center', marginBottom: '32px' }}>
+            <div style={{
+              display: 'inline-flex',
+              width: '48px', height: '48px',
+              background: 'var(--gradient-primary)',
+              borderRadius: '12px',
+              alignItems: 'center', justifyContent: 'center',
+              marginBottom: '12px',
+              boxShadow: '0 0 20px hsl(var(--primary) / 0.3)',
+            }}>
+              <Scale size={22} color="#fff" />
+            </div>
+            <h1 style={{ margin: 0, fontSize: '22px', fontWeight: 700, color: 'hsl(var(--foreground))' }}>LEX CALCULATOR</h1>
+            <p style={{ margin: '4px 0 0', fontSize: '13px', color: 'hsl(var(--muted-foreground))' }}>Nicolas Gomes Advogado</p>
+          </div>
+
+          {/* Card */}
+          <div style={{
+            background: 'rgba(20,24,31,0.5)',
+            backdropFilter: 'blur(8px)',
+            borderRadius: '12px',
+            border: '1px solid hsl(var(--border))',
+            padding: '32px',
+            boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)',
+          }}>
+            <h2 style={{ margin: '0 0 6px', fontSize: '22px', fontWeight: 700, color: 'hsl(var(--foreground))' }}>
+              Bem-vindo de volta
+            </h2>
+            <p style={{ margin: '0 0 24px', fontSize: '14px', color: 'hsl(var(--muted-foreground))' }}>
+              Entre com suas credenciais para acessar o sistema
+            </p>
+
+            {/* Error */}
+            {erro && (
+              <div style={{
+                background: 'var(--error-bg)',
+                border: '1px solid var(--error-border)',
+                borderRadius: '10px',
+                padding: '10px 14px',
+                marginBottom: '16px',
+                display: 'flex',
+                alignItems: 'flex-start',
+                gap: '8px',
+                fontSize: '13px',
+                color: 'var(--error)',
+              }}>
+                <AlertCircle size={15} style={{ flexShrink: 0, marginTop: '1px' }} />
+                {erro}
+              </div>
+            )}
+
+            <form onSubmit={handleSubmit}>
+              {/* Email */}
+              <div style={{ marginBottom: '16px' }}>
+                <label style={{
+                  display: 'block',
+                  fontSize: '14px',
+                  fontWeight: 500,
+                  color: 'hsl(var(--foreground))',
+                  marginBottom: '6px',
+                }}>E-mail</label>
+                <div style={{ position: 'relative' }}>
+                  <Mail size={15} style={{
+                    position: 'absolute', left: '12px', top: '50%',
+                    transform: 'translateY(-50%)',
+                    color: 'hsl(var(--muted-foreground))',
+                    pointerEvents: 'none',
+                  }} />
+                  <input
+                    type="text"
+                    value={email}
+                    onChange={e => setEmail(e.target.value)}
+                    className="input-lex input-icon"
+                    placeholder="seu@email.com.br ou admin"
+                    required
+                    autoFocus
+                  />
+                </div>
+              </div>
+
+              {/* Password */}
+              <div style={{ marginBottom: '24px' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                  <label style={{ fontSize: '14px', fontWeight: 500, color: 'hsl(var(--foreground))' }}>Senha</label>
+                </div>
+                <div style={{ position: 'relative' }}>
+                  <Lock size={15} style={{
+                    position: 'absolute', left: '12px', top: '50%',
+                    transform: 'translateY(-50%)',
+                    color: 'hsl(var(--muted-foreground))',
+                    pointerEvents: 'none',
+                  }} />
+                  <input
+                    type="password"
+                    value={senha}
+                    onChange={e => setSenha(e.target.value)}
+                    className="input-lex input-icon"
+                    placeholder="••••••••"
+                    required
+                  />
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={loading}
+                className="btn-primary"
+                style={{ width: '100%', height: '48px' }}
+              >
+                {loading
+                  ? <><Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} /> Verificando...</>
+                  : <>Entrar <ChevronRight size={16} /></>
+                }
+              </button>
+            </form>
+          </div>
+
+          {/* Demo hint */}
+          <div style={{
+            marginTop: '16px',
+            padding: '12px 16px',
+            background: 'hsl(var(--secondary))',
+            border: '1px solid hsl(var(--border))',
+            borderRadius: '10px',
+            fontSize: '13px',
+            color: 'hsl(var(--muted-foreground))',
+          }}>
+            <span style={{ color: 'hsl(var(--primary))', fontWeight: 600 }}>Acesso demo:</span>{' '}
+            E-mail: <span className="mono" style={{ color: 'hsl(var(--foreground))' }}>admin</span>{' '}
+            / Senha: <span className="mono" style={{ color: 'hsl(var(--foreground))' }}>admin</span>
+          </div>
+        </div>
+      </div>
+
+      <style>{`
+        @media (min-width: 1024px) {
+          .left-panel { display: block !important; }
+          .mobile-logo { display: none !important; }
+        }
+      `}</style>
     </div>
   )
 }
