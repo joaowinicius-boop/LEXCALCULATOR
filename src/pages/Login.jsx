@@ -302,9 +302,9 @@ export default function Login() {
             fontSize: '13px',
             color: 'hsl(var(--muted-foreground))',
           }}>
-            <span style={{ color: 'hsl(var(--primary))', fontWeight: 600 }}>Acesso demo:</span>{' '}
-            E-mail: <span className="mono" style={{ color: 'hsl(var(--foreground))' }}>admin</span>{' '}
-            / Senha: <span className="mono" style={{ color: 'hsl(var(--foreground))' }}>admin</span>
+            <span style={{ color: 'hsl(var(--primary))', fontWeight: 600 }}>Acesso:</span>{' '}
+            <span className="mono" style={{ color: 'hsl(var(--foreground))' }}>nicolasgomesadv@gmail.com</span>{' '}
+            / <span className="mono" style={{ color: 'hsl(var(--foreground))' }}>lexcalculator123</span>
           </div>
         </div>
       </div>
