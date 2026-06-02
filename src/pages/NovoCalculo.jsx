@@ -3,12 +3,13 @@ import { useNavigate } from 'react-router-dom'
 import {
   ChevronRight, ChevronLeft, Plus, Trash2, Check,
   FileText, Scale, Calculator, ClipboardCopy, Printer,
-  Info, AlertCircle
+  Info, AlertCircle, Loader2
 } from 'lucide-react'
 import {
-  calcularVerba, fmt, fmtDate,
+  calcularVerba, calcularTotal, fmt, fmtDate,
   TIPO_VERBA, INDICE_LABEL
 } from '../utils/calcular.js'
+import { useCalculos } from '../hooks/useCalculos.js'
 
 let _id = 1
 const uid = () => String(_id++)
@@ -251,9 +252,12 @@ const VERBA_DEFAULT = {
 }
 
 export default function NovoCalculo() {
-  const navigate = useNavigate()
-  const [step, setStep] = useState(1)
-  const [copied, setCopied] = useState(false)
+  const navigate  = useNavigate()
+  const { salvarCalculo } = useCalculos()
+  const [step,    setStep]    = useState(1)
+  const [copied,  setCopied]  = useState(false)
+  const [saving,  setSaving]  = useState(false)
+  const [saveErr, setSaveErr] = useState('')
 
   const [dados, setDados] = useState({
     processo: '', cliente: '', executada: '', vara: '',
@@ -285,6 +289,20 @@ export default function NovoCalculo() {
     res: calcularVerba({ ...v, dataDecisao: dados.dataDecisao, dataAjuizamento: dados.dataAjuizamento, dataCitacao: v.dataCitacao || dados.dataCitacao }, hoje),
   }))
   const totalAtualizado = resultados.reduce((a, r) => a + (r.res?.valorAtualizado ?? 0), 0)
+
+  // Ao chegar no step 4, salva automaticamente no Supabase
+  async function irParaResultado() {
+    setSaveErr('')
+    setSaving(true)
+    try {
+      await salvarCalculo(dados, dados.verbas, totalAtualizado)
+    } catch (e) {
+      setSaveErr('Erro ao salvar: ' + e.message)
+    } finally {
+      setSaving(false)
+    }
+    setStep(4)
+  }
 
   function copiarTexto() {
     const linhas = [
@@ -558,9 +576,17 @@ export default function NovoCalculo() {
           </button>
 
           {step < 4 ? (
-            <button className="btn-primary" onClick={() => setStep(s => s + 1)} disabled={!canNext()} style={{ height: '40px', fontSize: '13px' }}>
-              {step === 3 ? 'Calcular' : 'Próximo'}
-              <ChevronRight size={15} />
+            <button
+              className="btn-primary"
+              onClick={() => step === 3 ? irParaResultado() : setStep(s => s + 1)}
+              disabled={!canNext() || saving}
+              style={{ height: '40px', fontSize: '13px' }}
+            >
+              {saving
+                ? <><Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> Salvando...</>
+                : step === 3 ? <>Calcular <ChevronRight size={15} /></>
+                : <>Próximo <ChevronRight size={15} /></>
+              }
             </button>
           ) : (
             <button className="btn-primary" onClick={() => navigate('/historico')} style={{ height: '40px', fontSize: '13px' }}>

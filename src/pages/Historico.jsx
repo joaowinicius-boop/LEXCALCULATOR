@@ -1,9 +1,10 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { fmt } from '../utils/calcular.js'
+import { useCalculos } from '../hooks/useCalculos.js'
 import {
   Search, Plus, CheckCircle2, Clock,
-  ChevronUp, ChevronDown, ArrowRight
+  ChevronUp, ChevronDown, ArrowRight, Loader2
 } from 'lucide-react'
 
 const TODOS = [
@@ -43,14 +44,29 @@ function TipoDocBadge({ tipo }) {
 
 export default function Historico() {
   const navigate = useNavigate()
+  const { calculos, loading, atualizarStatus } = useCalculos()
   const [busca,  setBusca]  = useState('')
   const [filtro, setFiltro] = useState('todos')
-  const [sort,   setSort]   = useState({ col: 'data', dir: 'desc' })
+  const [sort,   setSort]   = useState({ col: 'created_at', dir: 'desc' })
+
+  // Adapta campos do Supabase para o formato da tabela
+  const TODOS = calculos.map(c => ({
+    id:       c.id,
+    processo: c.processo || '—',
+    cliente:  c.cliente,
+    executada:c.executada,
+    data:     new Date(c.created_at).toLocaleDateString('pt-BR'),
+    total:    c.total_atualizado ?? 0,
+    status:   c.status,
+    verbas:   c.verbas?.length ?? 0,
+    tipoDoc:  c.tipo_documento === 'acordao' ? 'Acórdão' : 'Sentença',
+    created_at: c.created_at,
+  }))
 
   const filtered = TODOS
     .filter(c => {
       const q = busca.toLowerCase()
-      const match = !q || c.cliente.toLowerCase().includes(q) || c.id.includes(q) || c.executada.toLowerCase().includes(q)
+      const match = !q || c.cliente.toLowerCase().includes(q) || c.processo.toLowerCase().includes(q) || c.executada.toLowerCase().includes(q)
       const statusMatch = filtro === 'todos' || c.status === filtro
       return match && statusMatch
     })
