@@ -3,12 +3,13 @@ import { useNavigate } from 'react-router-dom'
 import {
   ChevronRight, ChevronLeft, Plus, Trash2, Check,
   FileText, Scale, Calculator, ClipboardCopy, Printer,
-  Info, AlertCircle, Loader2
+  Info, AlertCircle, Loader2, Sparkles, CheckCircle2, XCircle
 } from 'lucide-react'
 import {
   calcularVerba, calcularTotal, fmt, fmtDate,
   TIPO_VERBA, INDICE_LABEL
 } from '../utils/calcular.js'
+import { extrairDoDispositivo } from '../utils/extrair.js'
 import { useCalculos } from '../hooks/useCalculos.js'
 
 let _id = 1
@@ -259,6 +260,21 @@ export default function NovoCalculo() {
   const [saving,  setSaving]  = useState(false)
   const [saveErr, setSaveErr] = useState('')
 
+  // ── Extração automática ──────────────────────────────────────────────────
+  const [dispositivo, setDispositivo] = useState('')
+  const [extracao, setExtracao] = useState(null) // { verbas, confianca, avisos } | null
+
+  function handleExtrair() {
+    if (!dispositivo.trim()) return
+    const resultado = extrairDoDispositivo(dispositivo)
+    setExtracao(resultado)
+  }
+
+  function limparExtracao() {
+    setDispositivo('')
+    setExtracao(null)
+  }
+
   const [dados, setDados] = useState({
     processo: '', cliente: '', executada: '', vara: '',
     tipoDocumento: 'sentenca',
@@ -282,6 +298,30 @@ export default function NovoCalculo() {
   }
   function removeVerba(id) { setDados(d => ({ ...d, verbas: d.verbas.filter(v => v.id !== id) })) }
   function updateVerba(id, u) { setDados(d => ({ ...d, verbas: d.verbas.map(v => v.id === id ? u : v) })) }
+
+  // Ao avançar do Step 2 → Step 3: carregar verbas extraídas (se houver)
+  function avancarParaStep3() {
+    if (extracao?.verbas?.length > 0) {
+      const novasVerbas = extracao.verbas.map(v => ({
+        ...VERBA_DEFAULT,
+        id: uid(),
+        tipo:              v.tipo,
+        valorOriginal:     v.valorOriginal,
+        emDobro:           v.emDobro,
+        indice:            v.indice,
+        termoInicial:      v.termoInicial,
+        incluirJuros:      v.incluirJuros,
+        dataCitacao:       dados.dataCitacao,
+        dataDecisao:       dados.dataDecisao,
+        dataAjuizamento:   dados.dataAjuizamento,
+        _emDobroNaSentenca: v._emDobroNaSentenca,
+        _ipcaSelic:         v._ipcaSelic,
+        _extraido:          true,
+      }))
+      setDados(d => ({ ...d, verbas: novasVerbas }))
+    }
+    setStep(3)
+  }
 
   const hoje = new Date().toISOString().split('T')[0]
   const resultados = dados.verbas.map(v => ({
@@ -444,6 +484,168 @@ export default function NovoCalculo() {
                 />
               </Field>
             </div>
+
+            {/* ── Extração automática ──────────────────────────────────── */}
+            <div style={{
+              marginTop: '24px',
+              padding: '16px',
+              background: 'hsl(var(--secondary))',
+              border: '1px solid hsl(var(--border))',
+              borderRadius: '12px',
+            }}>
+              {/* Header */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <Sparkles size={15} color="hsl(var(--primary))" />
+                  <p style={{ margin: 0, fontSize: '13px', fontWeight: 600, color: 'hsl(var(--foreground))' }}>
+                    Extração Automática — Fase 1
+                  </p>
+                  <span style={{
+                    background: 'hsl(var(--primary) / 0.1)',
+                    color: 'hsl(var(--primary))',
+                    border: '1px solid hsl(var(--primary) / 0.2)',
+                    borderRadius: '99px',
+                    padding: '1px 8px',
+                    fontSize: '10px',
+                    fontWeight: 600,
+                    letterSpacing: '0.05em',
+                  }}>REGEX</span>
+                </div>
+                {extracao && (
+                  <button onClick={limparExtracao} style={{ background: 'transparent', border: 'none', cursor: 'pointer', fontSize: '12px', color: 'hsl(var(--muted-foreground))', padding: '2px 6px', borderRadius: '4px' }}
+                    onMouseEnter={e => e.currentTarget.style.color = 'hsl(var(--foreground))'}
+                    onMouseLeave={e => e.currentTarget.style.color = 'hsl(var(--muted-foreground))'}
+                  >
+                    Limpar
+                  </button>
+                )}
+              </div>
+
+              <p style={{ margin: '0 0 12px', fontSize: '12px', color: 'hsl(var(--muted-foreground))' }}>
+                Cole o texto da parte dispositiva da sentença ou acórdão. O sistema tentará extrair as verbas automaticamente.
+                Na <strong style={{ color: 'hsl(var(--foreground))' }}>Fase 2</strong>, isso será feito pela IA (Claude API) com precisão muito maior.
+              </p>
+
+              <textarea
+                className="input-lex"
+                rows={5}
+                placeholder="Cole aqui o texto do dispositivo (a partir de 'ANTE O EXPOSTO' ou 'CONDENAR...')"
+                value={dispositivo}
+                onChange={e => { setDispositivo(e.target.value); if (extracao) setExtracao(null) }}
+                style={{ resize: 'vertical', minHeight: '100px', fontFamily: 'inherit', fontSize: '13px' }}
+              />
+
+              <div style={{ marginTop: '10px', display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
+                <button
+                  onClick={handleExtrair}
+                  disabled={!dispositivo.trim()}
+                  className="btn-primary"
+                  style={{ height: '36px', fontSize: '12px', padding: '0 14px', opacity: !dispositivo.trim() ? 0.45 : 1 }}
+                >
+                  <Sparkles size={13} /> Extrair verbas
+                </button>
+                <p style={{ margin: 0, fontSize: '11px', color: 'hsl(var(--muted-foreground))', fontStyle: 'italic' }}>
+                  Opcional — você pode preencher as verbas manualmente no próximo passo
+                </p>
+              </div>
+
+              {/* Preview dos resultados ────────────────────────────────── */}
+              {extracao && (
+                <div style={{ marginTop: '14px' }} className="fade-in">
+                  {/* Badges de status */}
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '10px' }}>
+                    {extracao.confianca === 'nenhuma' ? (
+                      <span style={{ display: 'flex', alignItems: 'center', gap: '6px', fontSize: '13px', color: 'hsl(var(--muted-foreground))' }}>
+                        <XCircle size={14} color="hsl(var(--muted-foreground))" />
+                        Nenhuma verba encontrada — preencha manualmente no próximo passo
+                      </span>
+                    ) : (
+                      <>
+                        <CheckCircle2 size={14} color="var(--success)" />
+                        <span style={{ fontSize: '13px', fontWeight: 600, color: 'var(--success)' }}>
+                          {extracao.verbas.length} verba{extracao.verbas.length !== 1 ? 's' : ''} encontrada{extracao.verbas.length !== 1 ? 's' : ''}
+                        </span>
+                        <span style={{
+                          fontSize: '10px', fontWeight: 600, letterSpacing: '0.05em',
+                          padding: '1px 7px', borderRadius: '99px',
+                          background: extracao.confianca === 'alta' ? 'var(--success-bg)' : 'var(--warning-bg)',
+                          color: extracao.confianca === 'alta' ? 'var(--success)' : 'var(--warning)',
+                          border: `1px solid ${extracao.confianca === 'alta' ? 'var(--success-border)' : 'var(--warning-border)'}`,
+                        }}>
+                          {extracao.confianca === 'alta' ? 'ALTA CONFIANÇA' : 'REVISAR'}
+                        </span>
+                      </>
+                    )}
+                  </div>
+
+                  {/* Tabela de verbas extraídas */}
+                  {extracao.verbas.length > 0 && (
+                    <div style={{ background: 'hsl(var(--background))', border: '1px solid hsl(var(--border))', borderRadius: '8px', overflow: 'hidden', marginBottom: '10px' }}>
+                      {extracao.verbas.map((v, i) => (
+                        <div key={i} style={{
+                          padding: '10px 14px',
+                          borderBottom: i < extracao.verbas.length - 1 ? '1px solid hsl(var(--border))' : 'none',
+                          display: 'flex',
+                          alignItems: 'flex-start',
+                          justifyContent: 'space-between',
+                          gap: '12px',
+                          flexWrap: 'wrap',
+                        }}>
+                          <div>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '3px' }}>
+                              <span style={{ fontSize: '13px', fontWeight: 600, color: 'hsl(var(--foreground))' }}>
+                                {TIPO_VERBA[v.tipo]}
+                              </span>
+                              {v._emDobroNaSentenca && (
+                                <span style={{ fontSize: '10px', fontWeight: 600, padding: '1px 6px', borderRadius: '4px', background: 'hsl(var(--primary) / 0.1)', color: 'hsl(var(--primary))', border: '1px solid hsl(var(--primary) / 0.2)' }}>
+                                  em dobro na sentença
+                                </span>
+                              )}
+                            </div>
+                            <p style={{ margin: 0, fontSize: '11px', color: 'hsl(var(--muted-foreground))' }}>
+                              {INDICE_LABEL[v.indice]}
+                              {v._ipcaSelic ? ' → SELIC após citação' : ''}
+                              {' · '}
+                              {v.termoInicial === 'ajuizamento' ? 'desde o ajuizamento' :
+                               v.termoInicial === 'citacao'     ? 'desde a citação' :
+                               v.termoInicial === 'decisao'     ? 'desde a decisão' : 'data personalizada'}
+                              {v.incluirJuros ? ' · com juros 1% a.m.' : ''}
+                            </p>
+                          </div>
+                          <span className="mono" style={{ fontSize: '14px', fontWeight: 700, color: 'hsl(var(--primary))', flexShrink: 0 }}>
+                            {fmt(parseFloat(v.valorOriginal))}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Avisos */}
+                  {extracao.avisos?.map((aviso, i) => (
+                    <div key={i} style={{
+                      padding: '9px 12px',
+                      background: 'var(--warning-bg)',
+                      border: '1px solid var(--warning-border)',
+                      borderRadius: '8px',
+                      display: 'flex',
+                      gap: '8px',
+                      fontSize: '12px',
+                      color: 'hsl(var(--muted-foreground))',
+                      marginBottom: '6px',
+                    }}>
+                      <AlertCircle size={13} style={{ flexShrink: 0, color: 'var(--warning)', marginTop: '1px' }} />
+                      {aviso}
+                    </div>
+                  ))}
+
+                  {extracao.verbas.length > 0 && (
+                    <p style={{ margin: '8px 0 0', fontSize: '12px', color: 'hsl(var(--muted-foreground))', fontStyle: 'italic' }}>
+                      ✓ As verbas acima serão carregadas automaticamente no próximo passo. Você pode editar qualquer campo.
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         )}
 
@@ -452,22 +654,81 @@ export default function NovoCalculo() {
           <div>
             <Section badge="03" eyebrow="VERBAS" title="Verbas da Condenação" desc="Adicione cada verba separadamente" />
 
+            {/* Banner de extração bem-sucedida */}
+            {dados.verbas.some(v => v._extraido) && (
+              <div style={{
+                marginBottom: '16px',
+                padding: '10px 14px',
+                background: 'hsl(var(--primary) / 0.07)',
+                border: '1px solid hsl(var(--primary) / 0.2)',
+                borderRadius: '8px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '8px',
+                fontSize: '13px',
+                color: 'hsl(var(--foreground))',
+              }}>
+                <Sparkles size={14} color="hsl(var(--primary))" style={{ flexShrink: 0 }} />
+                <span>
+                  <strong>{dados.verbas.filter(v => v._extraido).length} verba{dados.verbas.filter(v => v._extraido).length !== 1 ? 's' : ''}</strong> carregada{dados.verbas.filter(v => v._extraido).length !== 1 ? 's' : ''} automaticamente.
+                  Revise os campos e ajuste se necessário antes de calcular.
+                </span>
+              </div>
+            )}
+
             {dados.verbas.length === 0 && (
               <div style={{ padding: '32px', textAlign: 'center', border: '1px dashed hsl(var(--border))', borderRadius: '12px', marginBottom: '16px' }}>
                 <Scale size={28} style={{ color: 'hsl(var(--muted-foreground))', marginBottom: '10px', opacity: 0.5 }} />
                 <p style={{ margin: 0, fontSize: '14px', color: 'hsl(var(--muted-foreground))' }}>Nenhuma verba adicionada</p>
-                <p style={{ margin: '4px 0 0', fontSize: '13px', color: 'hsl(var(--muted-foreground))', opacity: 0.7 }}>Clique em "+ Adicionar Verba" para começar</p>
+                <p style={{ margin: '4px 0 0', fontSize: '13px', color: 'hsl(var(--muted-foreground))', opacity: 0.7 }}>
+                  {extracao?.confianca === 'nenhuma'
+                    ? 'A extração não encontrou verbas — adicione manualmente abaixo'
+                    : 'Clique em "+ Adicionar Verba" para começar'}
+                </p>
               </div>
             )}
 
             {dados.verbas.map(v => (
-              <VerbaForm
-                key={v.id}
-                verba={v}
-                onChange={u => updateVerba(v.id, u)}
-                onRemove={() => removeVerba(v.id)}
-                dataCitacao={dados.dataCitacao}
-              />
+              <div key={v.id} style={{ position: 'relative' }}>
+                {v._extraido && (
+                  <div style={{
+                    position: 'absolute', top: '10px', right: '10px', zIndex: 1,
+                    display: 'flex', alignItems: 'center', gap: '4px',
+                    background: 'hsl(var(--primary) / 0.1)',
+                    border: '1px solid hsl(var(--primary) / 0.2)',
+                    borderRadius: '99px',
+                    padding: '2px 8px',
+                    fontSize: '10px',
+                    fontWeight: 600,
+                    color: 'hsl(var(--primary))',
+                    pointerEvents: 'none',
+                  }}>
+                    <Sparkles size={9} /> Auto-extraída
+                  </div>
+                )}
+                {v._ipcaSelic && (
+                  <div style={{
+                    position: 'absolute', top: '32px', right: '10px', zIndex: 1,
+                    display: 'flex', alignItems: 'center', gap: '4px',
+                    background: 'var(--warning-bg)',
+                    border: '1px solid var(--warning-border)',
+                    borderRadius: '99px',
+                    padding: '2px 8px',
+                    fontSize: '10px',
+                    fontWeight: 600,
+                    color: 'var(--warning)',
+                    pointerEvents: 'none',
+                  }}>
+                    <AlertCircle size={9} /> IPCA→SELIC
+                  </div>
+                )}
+                <VerbaForm
+                  verba={v}
+                  onChange={u => updateVerba(v.id, u)}
+                  onRemove={() => removeVerba(v.id)}
+                  dataCitacao={dados.dataCitacao}
+                />
+              </div>
             ))}
 
             <button className="btn-secondary" onClick={addVerba} style={{ width: '100%', justifyContent: 'center', padding: '10px' }}>
@@ -578,13 +839,18 @@ export default function NovoCalculo() {
           {step < 4 ? (
             <button
               className="btn-primary"
-              onClick={() => step === 3 ? irParaResultado() : setStep(s => s + 1)}
+              onClick={() => {
+                if (step === 3) irParaResultado()
+                else if (step === 2) avancarParaStep3()
+                else setStep(s => s + 1)
+              }}
               disabled={!canNext() || saving}
               style={{ height: '40px', fontSize: '13px' }}
             >
               {saving
                 ? <><Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> Salvando...</>
                 : step === 3 ? <>Calcular <ChevronRight size={15} /></>
+                : step === 2 && extracao?.verbas?.length > 0 ? <><Sparkles size={14} /> Avançar com {extracao.verbas.length} verba{extracao.verbas.length !== 1 ? 's' : ''} <ChevronRight size={15} /></>
                 : <>Próximo <ChevronRight size={15} /></>
               }
             </button>
