@@ -4,7 +4,6 @@ import Login from './pages/Login.jsx'
 import Dashboard from './pages/Dashboard.jsx'
 import NovoCalculo from './pages/NovoCalculo.jsx'
 import Historico from './pages/Historico.jsx'
-import DemoRelatorio from './pages/DemoRelatorio.jsx'
 import Layout from './components/Layout.jsx'
 
 function PrivateRoute({ children }) {
@@ -17,7 +16,6 @@ function AppRoutes() {
   return (
     <Routes>
       <Route path="/login" element={user ? <Navigate to="/" replace /> : <Login />} />
-      <Route path="/demo-relatorio" element={<DemoRelatorio />} />{/* TEMP: validação visual */}
       <Route path="/" element={
         <PrivateRoute>
           <Layout><Dashboard /></Layout>
