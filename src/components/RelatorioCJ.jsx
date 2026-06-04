@@ -156,17 +156,20 @@ export default function RelatorioCJ({ meta = {}, geradoEm, termoFinal, verba, re
       {/* ─────────── SHEET 3 ─────────── */}
       <section className="cj-sheet cj-break">
         <h2 style={S.h2}>Débitos</h2>
-        <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+        <table className="cj-deb">
+          <colgroup>
+            {[8, 11, 10, 11, 10, 12, 8, 10, 8, 12].map((w, i) => <col key={i} style={{ width: w + '%' }} />)}
+          </colgroup>
           <thead>
             <tr>
-              <th style={S.th} colSpan={4}>Parcelas</th>
-              <th style={S.th} colSpan={2}>Correção monetária</th>
-              <th style={S.th} colSpan={2}>Juros de Mora</th>
-              <th style={S.th} colSpan={2}>Total</th>
+              <th className="grp" colSpan={4}>Parcelas</th>
+              <th className="grp" colSpan={2}>Correção monetária</th>
+              <th className="grp" colSpan={2}>Juros de Mora</th>
+              <th className="grp" colSpan={2}>Total</th>
             </tr>
             <tr>
               {['Tipo', 'Descrição', 'Data', 'Valor', 'Fator', 'Valor', 'Percentual', 'Valor', 'Multa', 'Valor Total'].map((h, i) => (
-                <th key={i} style={{ ...S.th, textAlign: i >= 3 ? 'right' : 'left' }}>{h}</th>
+                <th key={i} className={i >= 3 ? 'r' : ''}>{h}</th>
               ))}
             </tr>
           </thead>
@@ -174,30 +177,30 @@ export default function RelatorioCJ({ meta = {}, geradoEm, termoFinal, verba, re
             {resultado.linhas.map((l, i) => (
               <Fragment key={i}>
                 <tr>
-                  <td style={S.td}>Principal</td>
-                  <td style={S.td}>{l.tipoLinha === 'Repetição de Indébito' ? 'Repetição de Indébito' : (verba.descricao || '—')}</td>
-                  <td style={S.td}>{fmtData(l.data)}</td>
-                  <td style={S.tdr} className="mono">{fmtBRL(l.valor)}</td>
-                  <td style={S.tdr} className="mono">{fmtFator(l.fator)}</td>
-                  <td style={S.tdr} className="mono">{fmtBRL(l.valorCorrigido)}</td>
-                  <td style={S.tdr} className="mono">{fmtPct(l.percentualJuros)}</td>
-                  <td style={S.tdr} className="mono">{fmtBRL(l.valorJuros)}</td>
-                  <td style={S.tdr} className="mono">{fmtBRL(0)}</td>
-                  <td style={{ ...S.tdr, fontWeight: 700 }} className="mono">{fmtBRL(l.total)}</td>
+                  <td>Principal</td>
+                  <td>{l.tipoLinha === 'Repetição de Indébito' ? 'Repetição de Indébito' : (verba.descricao || '—')}</td>
+                  <td className="nw">{fmtData(l.data)}</td>
+                  <td className="r mono">{fmtBRL(l.valor)}</td>
+                  <td className="r mono">{fmtFator(l.fator)}</td>
+                  <td className="r mono">{fmtBRL(l.valorCorrigido)}</td>
+                  <td className="r mono">{fmtPct(l.percentualJuros)}</td>
+                  <td className="r mono">{fmtBRL(l.valorJuros)}</td>
+                  <td className="r mono">{fmtBRL(0)}</td>
+                  <td className="r mono" style={{ fontWeight: 700 }}>{fmtBRL(l.total)}</td>
                 </tr>
                 <tr>
-                  <td colSpan={10} style={{ ...S.td, fontSize: '7.5pt', color: '#64748b', borderTop: 'none' }}>{footnote(l)}</td>
+                  <td className="foot" colSpan={10}>{footnote(l)}</td>
                 </tr>
               </Fragment>
             ))}
-            <tr style={{ fontWeight: 700, background: '#eef4fa' }}>
-              <td style={S.td} colSpan={4}>Total</td>
-              <td style={S.td}></td>
-              <td style={S.tdr} className="mono">{fmtBRL(principal)}</td>
-              <td style={S.td}></td>
-              <td style={S.tdr} className="mono">{fmtBRL(juros)}</td>
-              <td style={S.tdr} className="mono">{fmtBRL(0)}</td>
-              <td style={S.tdr} className="mono">{fmtBRL(subtotal)}</td>
+            <tr className="tot">
+              <td colSpan={4}>Total</td>
+              <td></td>
+              <td className="r mono">{fmtBRL(principal)}</td>
+              <td></td>
+              <td className="r mono">{fmtBRL(juros)}</td>
+              <td className="r mono">{fmtBRL(0)}</td>
+              <td className="r mono">{fmtBRL(subtotal)}</td>
             </tr>
           </tbody>
         </table>

@@ -67,6 +67,22 @@ export default function Relatorio({ relatorio }) {
           justify-content: space-between;
         }
         .mono { font-variant-numeric: tabular-nums; }
+        .cj-deb { table-layout: fixed; width: 100%; border-collapse: collapse; }
+        .cj-deb th, .cj-deb td {
+          border: 1px solid #e2e8f0;
+          padding: 3px 4px;
+          font-size: 7.5pt;
+          line-height: 1.25;
+          vertical-align: top;
+          word-break: break-word;
+          overflow: hidden;
+        }
+        .cj-deb th { background: #eef4fa; color: #334155; font-weight: 600; border-color: #cbd5e1; }
+        .cj-deb .grp { text-align: center; }
+        .cj-deb .r { text-align: right; white-space: nowrap; }
+        .cj-deb .nw { white-space: nowrap; }
+        .cj-deb .foot { font-size: 7pt; color: #64748b; border-top: none; }
+        .cj-deb .tot td { font-weight: 700; background: #eef4fa; border-color: #cbd5e1; }
         @media print {
           @page { size: A4; margin: 1.4cm; }
           .no-print { display: none !important; }
