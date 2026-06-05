@@ -19,7 +19,9 @@ export function useCalculos() {
 
   useEffect(() => { fetch() }, [fetch])
 
-  async function salvarCalculo(dados, verbas, totalAtualizado) {
+  const parseValor = (x) => parseFloat(String(x ?? '').replace(/\./g, '').replace(',', '.')) || parseFloat(x) || 0
+
+  async function salvarCalculo(dados, verbas, totalAtualizado, extra = {}) {
     // Inserir cabeçalho
     const { data: calculo, error: errCalc } = await supabase
       .from('calculos')
@@ -36,24 +38,25 @@ export function useCalculos() {
         observacoes:      dados.observacoes     || null,
         status:           'pendente',
         total_atualizado: totalAtualizado,
+        dados_calculo:    { verbas, termoFinal: extra.termoFinal || null },
         user_id:          (await supabase.auth.getUser()).data.user?.id,
       })
       .select()
       .single()
     if (errCalc) throw errCalc
 
-    // Inserir verbas
+    // Inserir verbas (resumo — o detalhamento completo fica em dados_calculo)
     if (verbas.length > 0) {
       const rows = verbas.map(v => ({
         calculo_id:        calculo.id,
         tipo:              v.tipo,
-        valor_original:    parseFloat(v.valorOriginal),
-        em_dobro:          v.emDobro,
+        valor_original:    (v.parcelas || []).reduce((a, p) => a + parseValor(p.valor), 0),
+        em_dobro:          !!v.emDobro,
         indice:            v.indice,
-        termo_inicial:     v.termoInicial,
-        data_personalizada:v.dataPersonalizada || null,
-        data_citacao:      v.dataCitacao       || null,
-        incluir_juros:     v.incluirJuros,
+        termo_inicial:     'decisao',
+        data_personalizada:null,
+        data_citacao:      v.jurosInicio || null,
+        incluir_juros:     !!(v.jurosTipo && v.jurosTipo !== 'nenhum'),
       }))
       const { error: errVerbas } = await supabase.from('verbas').insert(rows)
       if (errVerbas) throw errVerbas
