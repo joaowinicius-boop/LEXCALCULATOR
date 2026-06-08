@@ -15,10 +15,16 @@ export function fileToBase64(file) {
  * que usa a IA (Claude) para devolver { processo, verbas } no contrato do sistema.
  */
 export async function extrairDocumentos({ documentos = [], texto = '' }) {
-  const { data, error } = await supabase.functions.invoke('extrair-doc', {
-    body: { documentos, texto },
-  })
-  if (error) throw new Error(error.message || 'Falha ao chamar a IA')
+  const invoke = supabase.functions.invoke('extrair-doc', { body: { documentos, texto } })
+  const timeout = new Promise((_, reject) =>
+    setTimeout(() => reject(new Error('A IA demorou demais para responder. Tente enviar menos páginas (só a inicial e o dispositivo) ou um PDF menor.')), 125000))
+
+  const { data, error } = await Promise.race([invoke, timeout])
+  if (error) {
+    let msg = error.message || 'Falha ao chamar a IA'
+    try { const j = await error.context?.json?.(); if (j?.error) msg = j.error } catch { /* ignore */ }
+    throw new Error(msg)
+  }
   if (data?.error) throw new Error(data.error)
   return data // { ok, processo, verbas, usage }
 }
