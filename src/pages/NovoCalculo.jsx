@@ -3,8 +3,10 @@ import { useNavigate } from 'react-router-dom'
 import {
   ChevronRight, ChevronLeft, Plus, Trash2, Check,
   FileText, Scale, Info, AlertCircle, Loader2, Sparkles, CheckCircle2, XCircle,
+  Upload, Bot, PencilLine, X,
 } from 'lucide-react'
 import { extrairDoDispositivo } from '../utils/extrair.js'
+import { extrairDocumentos, fileToBase64 } from '../lib/extrairDoc.js'
 import { carregarSeries } from '../lib/indices.js'
 import { calcularProcesso, fmtBRL, fmtData } from '../utils/calcularJuridico.js'
 import { useCalculos } from '../hooks/useCalculos.js'
@@ -177,6 +179,12 @@ export default function NovoCalculo() {
   const [dispositivo, setDispositivo] = useState('')
   const [extracao, setExtracao] = useState(null)
 
+  // ── Modo automático (IA lê documentos) ──
+  const [modo, setModo] = useState('manual')        // 'manual' | 'auto'
+  const [arquivos, setArquivos] = useState([])      // File[]
+  const [extraindo, setExtraindo] = useState(false)
+  const [extraiErr, setExtraiErr] = useState('')
+
   const [dados, setDados] = useState({
     processo: '', cliente: '', executada: '', vara: '',
     tipoDocumento: 'sentenca',
@@ -224,6 +232,59 @@ export default function NovoCalculo() {
       setDados(d => ({ ...d, verbas: novas }))
     }
     setStep(3)
+  }
+
+  // Aplica o resultado da IA (contrato { processo, verbas }) ao estado do wizard
+  function aplicarExtracao(res) {
+    const p = res.processo || {}
+    const verbas = (res.verbas || []).map(v => {
+      const isMaterial = v.tipo === 'dano_material'
+      return {
+        ...VERBA_DEFAULT, id: uid(),
+        tipo: v.tipo || 'dano_material',
+        indice: v.indice || 'INPC',
+        emDobro: isMaterial ? !!v.emDobro : false,      // defensivo: dobro só material
+        jurosTipo: v.indice === 'SELIC' && v.tipo === 'dano_moral' ? 'nenhum' : (v.jurosTipo || 'fixo_1'),
+        jurosInicio: v.jurosInicio || '',
+        descricao: v.descricao || '',
+        parcelas: (v.parcelas || []).map(pc => ({ id: uid(), data: pc.data || '', valor: pc.valor ?? '' })),
+      }
+    })
+    setDados(d => ({
+      ...d,
+      processo: p.processo || d.processo,
+      cliente: p.cliente || d.cliente,
+      executada: p.executada || d.executada,
+      vara: p.vara || d.vara,
+      tipoDocumento: p.tipoDocumento || d.tipoDocumento,
+      dataDecisao: p.dataDecisao || d.dataDecisao,
+      dataTransito: p.dataTransito || d.dataTransito,
+      dataCitacao: p.dataCitacao || d.dataCitacao,
+      dataAjuizamento: p.dataAjuizamento || d.dataAjuizamento,
+      verbas,
+    }))
+  }
+
+  async function extrairComIA() {
+    if (!arquivos.length) return
+    setExtraiErr(''); setExtraindo(true)
+    try {
+      const documentos = []
+      for (const f of arquivos) {
+        documentos.push({ base64: await fileToBase64(f), mediaType: f.type || 'application/pdf', nome: f.name })
+      }
+      const res = await extrairDocumentos({ documentos })
+      if (!res.verbas?.length) {
+        setExtraiErr('A IA não encontrou verbas nos documentos. Você pode preencher manualmente.')
+      } else {
+        aplicarExtracao(res)
+        setStep(3) // revisar verbas/parcelas
+      }
+    } catch (e) {
+      setExtraiErr('Erro na extração: ' + e.message)
+    } finally {
+      setExtraindo(false)
+    }
   }
 
   async function gerarRelatorios() {
@@ -304,8 +365,79 @@ export default function NovoCalculo() {
       <div className="card fade-up" style={{ padding: '24px 28px' }}>
         <Steps current={step} />
 
-        {/* STEP 1 */}
+        {/* Seletor de modo (só no passo 1) */}
         {step === 1 && (
+          <div style={{ display: 'flex', gap: '10px', marginBottom: '20px' }}>
+            {[
+              { v: 'auto', icon: Bot, l: 'Automático', sub: 'IA lê os documentos' },
+              { v: 'manual', icon: PencilLine, l: 'Manual', sub: 'Preencher os campos' },
+            ].map(opt => {
+              const Icon = opt.icon
+              const active = modo === opt.v
+              return (
+                <button key={opt.v} onClick={() => setModo(opt.v)} style={{
+                  flex: 1, padding: '12px 14px', borderRadius: '10px', cursor: 'pointer', textAlign: 'left',
+                  border: `1px solid ${active ? 'hsl(var(--primary))' : 'hsl(var(--border))'}`,
+                  background: active ? 'hsl(var(--primary) / 0.08)' : 'hsl(var(--secondary))',
+                  color: active ? 'hsl(var(--primary))' : 'hsl(var(--muted-foreground))',
+                  display: 'flex', alignItems: 'center', gap: '10px',
+                }}>
+                  <Icon size={18} />
+                  <span><p style={{ margin: 0, fontSize: '14px', fontWeight: 600 }}>{opt.l}</p>
+                  <p style={{ margin: '2px 0 0', fontSize: '12px', opacity: 0.8 }}>{opt.sub}</p></span>
+                </button>
+              )
+            })}
+          </div>
+        )}
+
+        {/* STEP 1 — AUTOMÁTICO (upload de documentos) */}
+        {step === 1 && modo === 'auto' && (
+          <div>
+            <Section badge="IA" eyebrow="EXTRAÇÃO AUTOMÁTICA" title="Enviar Documentos" desc="Anexe a petição inicial, a sentença/acórdão e (se tiver) o extrato. A IA preenche o cálculo." />
+            <label style={{
+              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
+              gap: '8px', padding: '28px', border: '2px dashed hsl(var(--border))', borderRadius: '12px',
+              cursor: 'pointer', background: 'hsl(var(--secondary))', textAlign: 'center',
+            }}>
+              <Upload size={26} style={{ color: 'hsl(var(--primary))' }} />
+              <span style={{ fontSize: '14px', fontWeight: 600, color: 'hsl(var(--foreground))' }}>Clique para selecionar PDFs ou imagens</span>
+              <span style={{ fontSize: '12px', color: 'hsl(var(--muted-foreground))' }}>Petição inicial · Sentença/Acórdão · Extrato (PDF nativo ou escaneado)</span>
+              <input type="file" multiple accept=".pdf,image/*" style={{ display: 'none' }}
+                onChange={e => { setArquivos([...arquivos, ...Array.from(e.target.files || [])]); e.target.value = '' }} />
+            </label>
+
+            {arquivos.length > 0 && (
+              <div style={{ marginTop: '12px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                {arquivos.map((f, i) => (
+                  <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', background: 'hsl(var(--secondary))', border: '1px solid hsl(var(--border))', borderRadius: '8px', fontSize: '13px' }}>
+                    <span style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'hsl(var(--foreground))' }}>
+                      <FileText size={14} color="hsl(var(--primary))" /> {f.name} <span style={{ color: 'hsl(var(--muted-foreground))' }}>({(f.size / 1024).toFixed(0)} KB)</span>
+                    </span>
+                    <button onClick={() => setArquivos(arquivos.filter((_, j) => j !== i))} className="btn-danger" style={{ padding: '3px 6px' }}><X size={12} /></button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {extraiErr && (
+              <div style={{ marginTop: '12px', padding: '10px 14px', background: 'var(--error-bg)', border: '1px solid var(--error-border)', borderRadius: '8px', color: 'var(--error)', fontSize: 13, display: 'flex', gap: 8 }}>
+                <AlertCircle size={15} style={{ flexShrink: 0, marginTop: 1 }} />{extraiErr}
+              </div>
+            )}
+
+            <button className="btn-primary" onClick={extrairComIA} disabled={!arquivos.length || extraindo}
+              style={{ marginTop: '16px', height: '44px', fontSize: '14px', width: '100%', justifyContent: 'center', opacity: (!arquivos.length || extraindo) ? 0.5 : 1 }}>
+              {extraindo ? <><Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} /> Lendo documentos com IA…</> : <><Bot size={16} /> Extrair tudo com IA</>}
+            </button>
+            <p style={{ margin: '10px 0 0', fontSize: '12px', color: 'hsl(var(--muted-foreground))', textAlign: 'center' }}>
+              A IA preenche processo, datas, verbas e parcelas. Você revisa no próximo passo antes de calcular.
+            </p>
+          </div>
+        )}
+
+        {/* STEP 1 — MANUAL */}
+        {step === 1 && modo === 'manual' && (
           <div>
             <Section badge="01" eyebrow="IDENTIFICAÇÃO" title="Dados do Processo" desc="Informações básicas do processo judicial" />
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
