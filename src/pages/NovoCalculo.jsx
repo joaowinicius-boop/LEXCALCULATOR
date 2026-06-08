@@ -121,7 +121,7 @@ function VerbaForm({ verba, onChange, onRemove }) {
         parcelas: r.parcelas.map(pc => ({ id: uid(), data: pc.data, valor: pc.valor })),
         totalDeclarado: r.totalSimples,
         emDobro: verba.emDobro || r.emDobro,
-        periodoInicio: '', periodoFim: '',
+        periodoInicio: '', periodoFim: '', fonte: 'planilha',
       })
     } catch (e) { setImpErr('Erro ao ler a planilha: ' + e.message) }
   }
@@ -174,6 +174,12 @@ function VerbaForm({ verba, onChange, onRemove }) {
 
       {isMaterial ? (
         <>
+          {verba.fonte === 'pdf' && (
+            <div style={{ marginTop: '12px', padding: '10px 12px', borderRadius: '8px', background: 'var(--warning-bg)', border: '1px solid var(--warning-border)', color: 'hsl(var(--foreground))', fontSize: '12.5px', display: 'flex', gap: 8 }}>
+              <AlertCircle size={15} color="var(--warning)" style={{ flexShrink: 0, marginTop: 1 }} />
+              <span><strong>Confira os descontos.</strong> A tabela da inicial é escaneada e a IA pode confundir “valor total” com “valor em dobro”. Para precisão, use <strong>★ Importar planilha</strong> (.xlsx) abaixo — os valores exatos substituem estes.</span>
+            </div>
+          )}
           <div style={{ marginTop: '12px' }}>
             <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '14px' }}>
               <input type="checkbox" checked={verba.emDobro} onChange={e => upd('emDobro', e.target.checked)} style={{ accentColor: 'hsl(var(--primary))', width: '15px', height: '15px' }} />
@@ -370,29 +376,36 @@ export default function NovoCalculo() {
   // confiável que SUBSTITUI a leitura da tabela escaneada no dano material.
   function aplicarExtracao(res, planilhaData = null) {
     const p = res.processo || {}
+    const num = (x) => { const n = Number(x); return isFinite(n) && n > 0 ? Math.round(n * 100) / 100 : 0 }
     let verbas = (res.verbas || []).map(v => {
       const isMaterial = v.tipo === 'dano_material'
       // Valor fixo (moral/honorários/outro): pega da 1ª parcela da IA (valor + data)
       const pIA = (v.parcelas || [])[0] || {}
       const valorFixo = isMaterial ? '' : (pIA.valor ?? '')
       const dataFixa = isMaterial ? '' : (pIA.data || p.dataDecisao || '')
+      // Base SIMPLES do dano material: prioriza VALOR TOTAL; se só veio EM DOBRO, divide por 2.
+      // (Impede o erro de usar o valor "em dobro" como base e dobrar de novo.)
+      const simples = num(v.valorTotalSimples) || (num(v.valorEmDobro) ? Math.round(num(v.valorEmDobro) / 2 * 100) / 100 : num(v.totalDeclarado))
+      const aiDobro = !!v.emDobro || num(v.valorEmDobro) > 0
       return {
         ...VERBA_DEFAULT, id: uid(),
         tipo: v.tipo || 'dano_material',
         indice: v.indice || 'INPC',
-        emDobro: isMaterial ? !!v.emDobro : false,      // defensivo: dobro só material
+        emDobro: isMaterial ? aiDobro : false,      // defensivo: dobro só material
         jurosTipo: v.indice === 'SELIC' && v.tipo === 'dano_moral' ? 'nenhum' : (v.jurosTipo || 'fixo_1'),
         jurosInicio: v.jurosInicio || '',
         descricao: v.descricao || '',
-        totalDeclarado: isMaterial ? (v.totalDeclarado ?? '') : '',
+        totalDeclarado: isMaterial ? (simples || '') : '',
         periodoInicio: isMaterial ? (v.periodoInicio || '') : '',
         periodoFim: isMaterial ? (v.periodoFim || '') : '',
-        // Dano material com total+período → gera parcelas mensais (confiável, sem alucinar linhas)
-        parcelas: (isMaterial && v.periodoInicio && v.periodoFim && v.totalDeclarado)
-          ? gerarParcelasMensais(v.totalDeclarado, v.periodoInicio, v.periodoFim)
+        // Dano material com total simples + período → gera parcelas mensais (sem alucinar linhas)
+        parcelas: (isMaterial && v.periodoInicio && v.periodoFim && simples)
+          ? gerarParcelasMensais(simples, v.periodoInicio, v.periodoFim)
           : (isMaterial ? (v.parcelas || []).map(pc => ({ id: uid(), data: pc.data || '', valor: pc.valor ?? '' })) : []),
         valor: valorFixo,
         data: dataFixa,
+        // origem dos descontos do material: 'pdf' (IA, conferir!) — vira 'planilha' se houver planilha
+        fonte: isMaterial ? 'pdf' : undefined,
       }
     })
 
@@ -406,14 +419,14 @@ export default function NovoCalculo() {
           jurosTipo: 'fixo_1', jurosInicio: p.dataCitacao || p.dataDecisao || '',
           emDobro: planilhaData.emDobro, descricao: '',
           totalDeclarado: planilhaData.totalSimples, periodoInicio: '', periodoFim: '',
-          parcelas: parcelasUI, valor: '', data: '',
+          parcelas: parcelasUI, valor: '', data: '', fonte: 'planilha',
         })
       } else {
         verbas[idx] = {
           ...verbas[idx], parcelas: parcelasUI,
           totalDeclarado: planilhaData.totalSimples,
           emDobro: verbas[idx].emDobro || planilhaData.emDobro,
-          periodoInicio: '', periodoFim: '',
+          periodoInicio: '', periodoFim: '', fonte: 'planilha',
         }
       }
     }
