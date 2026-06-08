@@ -158,9 +158,26 @@ function VerbaForm({ verba, onChange, onRemove }) {
         </label>
       </div>
       <div style={{ marginTop: '12px' }}>
-        <Field label="Total dos descontos informado na inicial (conferência)" hint="A soma da tabela / valor da restituição declarado na petição — usado para conferir as parcelas">
+        <Field label="Total dos descontos informado na inicial" hint="A soma da tabela / valor da restituição declarado na petição — base da geração e da conferência">
           <input type="number" step="0.01" min="0" className="input-lex mono" placeholder="Ex.: 519,64" value={verba.totalDeclarado ?? ''} onChange={e => upd('totalDeclarado', e.target.value)} style={{ maxWidth: 240 }} />
         </Field>
+      </div>
+
+      {/* Gerar parcelas mensais a partir do total + período (sem depender de OCR linha a linha) */}
+      <div style={{ marginTop: '10px', padding: '12px 14px', border: '1px dashed hsl(var(--primary) / 0.4)', borderRadius: '10px', background: 'hsl(var(--primary) / 0.05)' }}>
+        <p style={{ margin: '0 0 8px', fontSize: '13px', fontWeight: 600, color: 'hsl(var(--primary))' }}>Gerar parcelas mensais (recomendado p/ descontos mensais)</p>
+        <Grid cols={2}>
+          <Field label="1º desconto (período de)"><input type="date" className="input-lex" value={verba.periodoInicio || ''} onChange={e => upd('periodoInicio', e.target.value)} /></Field>
+          <Field label="Último desconto (período até)"><input type="date" className="input-lex" value={verba.periodoFim || ''} onChange={e => upd('periodoFim', e.target.value)} /></Field>
+        </Grid>
+        <button className="btn-secondary" style={{ marginTop: '10px', fontSize: '12px' }}
+          disabled={!verba.totalDeclarado || !verba.periodoInicio || !verba.periodoFim}
+          onClick={() => { const p = gerarParcelasMensais(verba.totalDeclarado, verba.periodoInicio, verba.periodoFim); if (p.length) upd('parcelas', p) }}>
+          <Plus size={13} /> Gerar parcelas mensais (total ÷ meses)
+        </button>
+        <p style={{ margin: '6px 0 0', fontSize: '11px', color: 'hsl(var(--muted-foreground))' }}>
+          Distribui o total no período em parcelas mensais — a soma bate exatamente com o total e cada parcela é corrigida pela sua data (padrão CJ). Mais confiável que transcrever a tabela escaneada.
+        </p>
       </div>
 
       <ParcelaEditor parcelas={verba.parcelas} onChange={(p) => upd('parcelas', p)} />
@@ -181,7 +198,31 @@ function VerbaForm({ verba, onChange, onRemove }) {
 // ─── Defaults / mapeamento ─────────────────────────────────────────────────────
 const VERBA_DEFAULT = {
   tipo: 'dano_material', indice: 'INPC', emDobro: true,
-  descricao: '', jurosTipo: 'fixo_1', jurosInicio: '', totalDeclarado: '', parcelas: [],
+  descricao: '', jurosTipo: 'fixo_1', jurosInicio: '',
+  totalDeclarado: '', periodoInicio: '', periodoFim: '', parcelas: [],
+}
+
+// Gera parcelas MENSAIS que somam EXATAMENTE o total, no período informado.
+// Evita depender de OCR linha-a-linha (que alucina meses) — usa total+período (confiáveis).
+function gerarParcelasMensais(total, iniISO, fimISO) {
+  const t = parseFloat(String(total).replace(',', '.')) || 0
+  if (!t || !iniISO || !fimISO) return []
+  const [ay, am, ad] = iniISO.split('-').map(Number)
+  const [by, bm] = fimISO.split('-').map(Number)
+  if (!ay || !am || !by || !bm) return []
+  const n = (by - ay) * 12 + (bm - am) + 1
+  if (n < 1 || n > 600) return []
+  const dia = Math.min(Math.max(ad || 28, 1), 28)
+  const per = Math.round((t / n) * 100) / 100
+  const out = []
+  for (let i = 0; i < n; i++) {
+    let m = am - 1 + i
+    const y = ay + Math.floor(m / 12)
+    const mm = (m % 12) + 1
+    const valor = i === n - 1 ? Math.round((t - per * (n - 1)) * 100) / 100 : per
+    out.push({ id: uid(), data: `${y}-${String(mm).padStart(2, '0')}-${String(dia).padStart(2, '0')}`, valor })
+  }
+  return out
 }
 
 function dataDoTermo(termo, dados) {
@@ -273,9 +314,14 @@ export default function NovoCalculo() {
         jurosInicio: v.jurosInicio || '',
         descricao: v.descricao || '',
         totalDeclarado: v.totalDeclarado ?? '',
-        parcelas: (v.parcelas || []).map(pc => ({ id: uid(), data: pc.data || '', valor: pc.valor ?? '' })),
+        periodoInicio: v.periodoInicio || '',
+        periodoFim: v.periodoFim || '',
+        // Dano material com total+período → gera parcelas mensais (confiável, sem alucinar linhas)
+        parcelas: (isMaterial && v.periodoInicio && v.periodoFim && v.totalDeclarado)
+          ? gerarParcelasMensais(v.totalDeclarado, v.periodoInicio, v.periodoFim)
+          : (v.parcelas || []).map(pc => ({ id: uid(), data: pc.data || '', valor: pc.valor ?? '' })),
       }
-    })
+    }).filter(v => v.parcelas.length > 0 || (parseFloat(String(v.totalDeclarado).replace(',', '.')) || 0) > 0)
     setDados(d => ({
       ...d,
       processo: p.processo || d.processo,
