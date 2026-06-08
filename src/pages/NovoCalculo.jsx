@@ -7,6 +7,7 @@ import {
 } from 'lucide-react'
 import { extrairDoDispositivo } from '../utils/extrair.js'
 import { extrairDocumentos, fileToBase64 } from '../lib/extrairDoc.js'
+import { analisarExtrato } from '../lib/extratoFinder.js'
 import { carregarSeries } from '../lib/indices.js'
 import { calcularProcesso, fmtBRL, fmtData } from '../utils/calcularJuridico.js'
 import { useCalculos } from '../hooks/useCalculos.js'
@@ -106,6 +107,26 @@ function ParcelaEditor({ parcelas, onChange }) {
 // ─── Formulário de uma verba ──────────────────────────────────────────────────
 function VerbaForm({ verba, onChange, onRemove }) {
   const upd = (k, v) => onChange({ ...verba, [k]: v })
+  const [imp, setImp] = useState({ loading: false, err: '', info: null, prog: null })
+
+  async function importarExtrato(fileList) {
+    const files = Array.from(fileList || [])
+    if (!files.length) return
+    setImp({ loading: true, err: '', info: null, prog: null })
+    try {
+      const r = await analisarExtrato(files, (page, total) => setImp(s => ({ ...s, prog: { page, total } })))
+      if (!r.parcelas.length) { setImp({ loading: false, err: 'Nenhuma cobrança indevida encontrada no extrato.', info: null, prog: null }); return }
+      onChange({
+        ...verba,
+        descricao: verba.descricao || (r.categorias[0]?.label || 'Cobranças indevidas'),
+        parcelas: r.parcelas.map(p => ({ id: uid(), data: p.data, valor: p.valor })),
+      })
+      setImp({ loading: false, err: '', prog: null, info: { banco: r.banco || '—', qtd: r.parcelas.length, total: r.total, cats: r.categorias } })
+    } catch (e) {
+      setImp({ loading: false, err: e.message, info: null, prog: null })
+    }
+  }
+
   return (
     <div className="card-elevated fade-in" style={{ padding: '16px', marginBottom: '12px' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
@@ -148,6 +169,29 @@ function VerbaForm({ verba, onChange, onRemove }) {
           Repetição do indébito — em dobro (cada parcela conta 2x)
         </label>
       </div>
+      {/* Importar extrato via LEX FINDER */}
+      <div style={{ marginTop: '12px', padding: '12px 14px', border: '1px dashed hsl(var(--primary) / 0.45)', borderRadius: '10px', background: 'hsl(var(--primary) / 0.05)' }}>
+        <label style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '13px', fontWeight: 600, color: 'hsl(var(--primary))' }}>
+          <Upload size={15} /> Importar extrato (LEX FINDER)
+          <input type="file" accept=".pdf" multiple style={{ display: 'none' }} onChange={e => { importarExtrato(e.target.files); e.target.value = '' }} />
+        </label>
+        <p style={{ margin: '4px 0 0', fontSize: '11px', color: 'hsl(var(--muted-foreground))' }}>
+          Suba o extrato bancário — o LEX FINDER detecta o banco e extrai as cobranças indevidas como parcelas (data + valor).
+        </p>
+        {imp.loading && (
+          <p style={{ margin: '8px 0 0', fontSize: '12px', color: 'hsl(var(--primary))', display: 'flex', alignItems: 'center', gap: '6px' }}>
+            <Loader2 size={13} style={{ animation: 'spin 1s linear infinite' }} /> Lendo extrato{imp.prog ? ` (pág. ${imp.prog.page}/${imp.prog.total})` : ''}…
+          </p>
+        )}
+        {imp.err && <p style={{ margin: '8px 0 0', fontSize: '12px', color: 'var(--error)' }}>{imp.err}</p>}
+        {imp.info && (
+          <div style={{ margin: '8px 0 0', fontSize: '12px', color: 'hsl(var(--foreground))' }}>
+            <CheckCircle2 size={13} color="var(--success)" style={{ verticalAlign: '-2px' }} /> <strong>{imp.info.banco}</strong> · {imp.info.qtd} cobranças · total simples <strong className="mono">{fmtBRL(imp.info.total)}</strong>
+            <div style={{ color: 'hsl(var(--muted-foreground))', marginTop: '4px' }}>{imp.info.cats.map(c => `${c.label} (${c.qtd})`).join(' · ')}</div>
+          </div>
+        )}
+      </div>
+
       <ParcelaEditor parcelas={verba.parcelas} onChange={(p) => upd('parcelas', p)} />
     </div>
   )
@@ -339,7 +383,7 @@ export default function NovoCalculo() {
   }
 
   function canNext() {
-    if (step === 1) return dados.processo.trim() && dados.cliente.trim() && dados.executada.trim()
+    if (step === 1) return dados.cliente.trim() && dados.executada.trim()
     if (step === 2) return dados.dataDecisao && dados.termoFinal
     if (step === 3) return dados.verbas.length > 0 && dados.verbas.every(v =>
       v.parcelas.length > 0 &&
