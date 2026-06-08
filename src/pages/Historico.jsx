@@ -4,7 +4,7 @@ import { fmt } from '../utils/calcular.js'
 import { useCalculos } from '../hooks/useCalculos.js'
 import {
   Search, Plus, CheckCircle2, Clock,
-  ChevronUp, ChevronDown, ArrowRight, Loader2
+  ChevronUp, ChevronDown, ArrowRight, Loader2, Trash2
 } from 'lucide-react'
 
 const TODOS = [
@@ -44,7 +44,16 @@ function TipoDocBadge({ tipo }) {
 
 export default function Historico() {
   const navigate = useNavigate()
-  const { calculos, loading, atualizarStatus } = useCalculos()
+  const { calculos, loading, excluirCalculo } = useCalculos()
+  const [excluindo, setExcluindo] = useState(null)
+
+  async function handleExcluir(c) {
+    if (!window.confirm(`Excluir o cálculo de "${c.cliente}"? Esta ação não pode ser desfeita.`)) return
+    setExcluindo(c.id)
+    try { await excluirCalculo(c.id) }
+    catch (e) { alert('Erro ao excluir: ' + e.message) }
+    finally { setExcluindo(null) }
+  }
   const [busca,  setBusca]  = useState('')
   const [filtro, setFiltro] = useState('todos')
   const [sort,   setSort]   = useState({ col: 'created_at', dir: 'desc' })
@@ -225,20 +234,27 @@ export default function Historico() {
                     <td><Badge status={c.status} /></td>
                     <td style={{ color: 'hsl(var(--muted-foreground))', fontSize: '13px', whiteSpace: 'nowrap' }}>{c.data}</td>
                     <td>
-                      <button
-                        onClick={() => navigate('/novo')}
-                        style={{
-                          background: 'transparent', border: 'none', cursor: 'pointer',
-                          color: 'hsl(var(--muted-foreground))',
-                          padding: '4px', borderRadius: '6px',
-                          display: 'flex', alignItems: 'center',
-                          transition: 'color 0.1s',
-                        }}
-                        onMouseEnter={e => e.currentTarget.style.color = 'hsl(var(--primary))'}
-                        onMouseLeave={e => e.currentTarget.style.color = 'hsl(var(--muted-foreground))'}
-                      >
-                        <ArrowRight size={14} />
-                      </button>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
+                        <button
+                          onClick={() => navigate('/novo')}
+                          title="Abrir"
+                          style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'hsl(var(--muted-foreground))', padding: '4px', borderRadius: '6px', display: 'flex', alignItems: 'center', transition: 'color 0.1s' }}
+                          onMouseEnter={e => e.currentTarget.style.color = 'hsl(var(--primary))'}
+                          onMouseLeave={e => e.currentTarget.style.color = 'hsl(var(--muted-foreground))'}
+                        >
+                          <ArrowRight size={14} />
+                        </button>
+                        <button
+                          onClick={() => handleExcluir(c)}
+                          disabled={excluindo === c.id}
+                          title="Excluir"
+                          style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'hsl(var(--muted-foreground))', padding: '4px', borderRadius: '6px', display: 'flex', alignItems: 'center', transition: 'color 0.1s' }}
+                          onMouseEnter={e => e.currentTarget.style.color = 'var(--error, crimson)'}
+                          onMouseLeave={e => e.currentTarget.style.color = 'hsl(var(--muted-foreground))'}
+                        >
+                          {excluindo === c.id ? <Loader2 size={14} style={{ animation: 'spin 1s linear infinite' }} /> : <Trash2 size={14} />}
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}

@@ -74,5 +74,13 @@ export function useCalculos() {
     if (!error) await fetch()
   }
 
-  return { calculos, loading, error, salvarCalculo, atualizarStatus, refetch: fetch }
+  async function excluirCalculo(id) {
+    // Remove as verbas (FK) antes do cabeçalho
+    await supabase.from('verbas').delete().eq('calculo_id', id)
+    const { error } = await supabase.from('calculos').delete().eq('id', id)
+    if (error) throw error
+    await fetch()
+  }
+
+  return { calculos, loading, error, salvarCalculo, atualizarStatus, excluirCalculo, refetch: fetch }
 }

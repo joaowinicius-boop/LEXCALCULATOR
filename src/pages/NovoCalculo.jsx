@@ -7,7 +7,6 @@ import {
 } from 'lucide-react'
 import { extrairDoDispositivo } from '../utils/extrair.js'
 import { extrairDocumentos, fileToBase64 } from '../lib/extrairDoc.js'
-import { extrairTextoPdf } from '../lib/pdfText.js'
 import { carregarSeries } from '../lib/indices.js'
 import { calcularProcesso, fmtBRL, fmtData } from '../utils/calcularJuridico.js'
 import { useCalculos } from '../hooks/useCalculos.js'
@@ -270,21 +269,13 @@ export default function NovoCalculo() {
     if (!arquivos.length) return
     setExtraiErr(''); setExtraindo(true)
     try {
+      // Envia o documento INTEIRO (PDF/imagem) — o gpt-4o lê texto + tabelas/extratos
+      // escaneados (visão/OCR), extraindo a tabela de descontos linha a linha.
       const documentos = []
-      let texto = ''
       for (const f of arquivos) {
-        const isPdf = f.type === 'application/pdf' || /\.pdf$/i.test(f.name)
-        if (isPdf) {
-          let t = ''
-          try { t = await extrairTextoPdf(f) } catch { t = '' }
-          if (t && t.length > 40) { texto += `\n\n===== ${f.name} =====\n${t}`; continue }
-          // PDF escaneado (sem texto): manda como imagem/visão
-          documentos.push({ base64: await fileToBase64(f), mediaType: 'application/pdf', nome: f.name })
-        } else {
-          documentos.push({ base64: await fileToBase64(f), mediaType: f.type || 'image/jpeg', nome: f.name })
-        }
+        documentos.push({ base64: await fileToBase64(f), mediaType: f.type || 'application/pdf', nome: f.name })
       }
-      const res = await extrairDocumentos({ documentos, texto })
+      const res = await extrairDocumentos({ documentos })
       if (!res.verbas?.length) {
         setExtraiErr('A IA não encontrou verbas nos documentos. Você pode preencher manualmente.')
       } else {
