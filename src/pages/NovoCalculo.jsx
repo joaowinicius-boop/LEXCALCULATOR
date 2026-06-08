@@ -7,6 +7,7 @@ import {
 } from 'lucide-react'
 import { extrairDoDispositivo } from '../utils/extrair.js'
 import { extrairDocumentos, fileToBase64 } from '../lib/extrairDoc.js'
+import { parsePlanilha, isPlanilha } from '../utils/planilha.js'
 import { carregarSeries } from '../lib/indices.js'
 import { calcularProcesso, fmtBRL, fmtData } from '../utils/calcularJuridico.js'
 import { useCalculos } from '../hooks/useCalculos.js'
@@ -107,6 +108,23 @@ function ParcelaEditor({ parcelas, onChange }) {
 function VerbaForm({ verba, onChange, onRemove }) {
   const upd = (k, v) => onChange({ ...verba, [k]: v })
   const isMaterial = isMaterialTipo(verba.tipo)
+  const [impErr, setImpErr] = useState('')
+
+  async function importarPlanilha(file) {
+    if (!file) return
+    setImpErr('')
+    try {
+      const r = await parsePlanilha(file)
+      if (!r.parcelas.length) { setImpErr('Não encontrei descontos nessa planilha. Confira o arquivo.'); return }
+      onChange({
+        ...verba,
+        parcelas: r.parcelas.map(pc => ({ id: uid(), data: pc.data, valor: pc.valor })),
+        totalDeclarado: r.totalSimples,
+        emDobro: verba.emDobro || r.emDobro,
+        periodoInicio: '', periodoFim: '',
+      })
+    } catch (e) { setImpErr('Erro ao ler a planilha: ' + e.message) }
+  }
 
   // Conferência da soma (Súmula 43): soma das parcelas vs total informado na inicial — só material
   const nump = (x) => parseFloat(String(x ?? '').replace(',', '.')) || 0
@@ -168,9 +186,23 @@ function VerbaForm({ verba, onChange, onRemove }) {
             </Field>
           </div>
 
-          {/* Gerar parcelas mensais a partir do total + período (sem depender de OCR linha a linha) */}
-          <div style={{ marginTop: '10px', padding: '12px 14px', border: '1px dashed hsl(var(--primary) / 0.4)', borderRadius: '10px', background: 'hsl(var(--primary) / 0.05)' }}>
-            <p style={{ margin: '0 0 8px', fontSize: '13px', fontWeight: 600, color: 'hsl(var(--primary))' }}>Gerar parcelas mensais (recomendado p/ descontos mensais)</p>
+          {/* Importar planilha da pasta do cliente — fonte confiável (sem OCR) */}
+          <div style={{ marginTop: '10px', padding: '12px 14px', border: '1px solid hsl(var(--primary) / 0.45)', borderRadius: '10px', background: 'hsl(var(--primary) / 0.07)' }}>
+            <p style={{ margin: '0 0 8px', fontSize: '13px', fontWeight: 700, color: 'hsl(var(--primary))' }}>★ Importar planilha de descontos (recomendado)</p>
+            <label className="btn-secondary" style={{ fontSize: '12px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+              <Upload size={13} /> Selecionar planilha (.xlsx / .xls / .csv)
+              <input type="file" accept=".xlsx,.xls,.csv" style={{ display: 'none' }}
+                onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; importarPlanilha(f) }} />
+            </label>
+            <p style={{ margin: '6px 0 0', fontSize: '11px', color: 'hsl(var(--muted-foreground))' }}>
+              Lê os descontos exatos (valores SIMPLES) + “VALOR TOTAL” + “VALOR EM DOBRO” direto da planilha — sem OCR, sem alucinar meses. O “em dobro” é aplicado pelo sistema.
+            </p>
+            {impErr && <p style={{ margin: '6px 0 0', fontSize: '11px', color: 'var(--error)' }}>{impErr}</p>}
+          </div>
+
+          {/* Alternativa: gerar parcelas mensais a partir do total + período (quando não há planilha) */}
+          <div style={{ marginTop: '10px', padding: '12px 14px', border: '1px dashed hsl(var(--border))', borderRadius: '10px', background: 'hsl(var(--secondary))' }}>
+            <p style={{ margin: '0 0 8px', fontSize: '13px', fontWeight: 600, color: 'hsl(var(--muted-foreground))' }}>Sem planilha? Gerar parcelas mensais (total ÷ meses)</p>
             <Grid cols={2}>
               <Field label="1º desconto (período de)"><input type="date" className="input-lex" value={verba.periodoInicio || ''} onChange={e => upd('periodoInicio', e.target.value)} /></Field>
               <Field label="Último desconto (período até)"><input type="date" className="input-lex" value={verba.periodoFim || ''} onChange={e => upd('periodoFim', e.target.value)} /></Field>
@@ -333,10 +365,12 @@ export default function NovoCalculo() {
     setStep(3)
   }
 
-  // Aplica o resultado da IA (contrato { processo, verbas }) ao estado do wizard
-  function aplicarExtracao(res) {
+  // Aplica o resultado da IA (contrato { processo, verbas }) ao estado do wizard.
+  // planilhaData (opcional) traz os descontos lidos da planilha da inicial — fonte
+  // confiável que SUBSTITUI a leitura da tabela escaneada no dano material.
+  function aplicarExtracao(res, planilhaData = null) {
     const p = res.processo || {}
-    const verbas = (res.verbas || []).map(v => {
+    let verbas = (res.verbas || []).map(v => {
       const isMaterial = v.tipo === 'dano_material'
       // Valor fixo (moral/honorários/outro): pega da 1ª parcela da IA (valor + data)
       const pIA = (v.parcelas || [])[0] || {}
@@ -360,7 +394,31 @@ export default function NovoCalculo() {
         valor: valorFixo,
         data: dataFixa,
       }
-    }).filter(v => parcelasDaVerba(v).length > 0 || (parseFloat(String(v.totalDeclarado).replace(',', '.')) || 0) > 0)
+    })
+
+    // Anexa as parcelas da PLANILHA ao dano material (valores SIMPLES; o motor dobra)
+    if (planilhaData && planilhaData.parcelas.length) {
+      const parcelasUI = planilhaData.parcelas.map(pc => ({ id: uid(), data: pc.data, valor: pc.valor }))
+      const idx = verbas.findIndex(v => v.tipo === 'dano_material')
+      if (idx === -1) {
+        verbas.unshift({
+          ...VERBA_DEFAULT, id: uid(), tipo: 'dano_material', indice: 'INPC',
+          jurosTipo: 'fixo_1', jurosInicio: p.dataCitacao || p.dataDecisao || '',
+          emDobro: planilhaData.emDobro, descricao: '',
+          totalDeclarado: planilhaData.totalSimples, periodoInicio: '', periodoFim: '',
+          parcelas: parcelasUI, valor: '', data: '',
+        })
+      } else {
+        verbas[idx] = {
+          ...verbas[idx], parcelas: parcelasUI,
+          totalDeclarado: planilhaData.totalSimples,
+          emDobro: verbas[idx].emDobro || planilhaData.emDobro,
+          periodoInicio: '', periodoFim: '',
+        }
+      }
+    }
+
+    verbas = verbas.filter(v => parcelasDaVerba(v).length > 0 || (parseFloat(String(v.totalDeclarado).replace(',', '.')) || 0) > 0)
     setDados(d => ({
       ...d,
       processo: p.processo || d.processo,
@@ -380,17 +438,34 @@ export default function NovoCalculo() {
     if (!arquivos.length) return
     setExtraiErr(''); setExtraindo(true)
     try {
-      // Envia o documento INTEIRO (PDF/imagem) — o gpt-4o lê texto + tabelas/extratos
-      // escaneados (visão/OCR), extraindo a tabela de descontos linha a linha.
-      const documentos = []
-      for (const f of arquivos) {
-        documentos.push({ base64: await fileToBase64(f), mediaType: f.type || 'application/pdf', nome: f.name })
+      // 1) PLANILHAS (.xlsx/.xls/.csv) → leitura determinística dos descontos
+      //    (dado estruturado, sem OCR/IA): parcelas exatas + total simples + em dobro.
+      const planilhas = arquivos.filter(isPlanilha)
+      const docs = arquivos.filter(f => !isPlanilha(f))
+      let planilhaData = null
+      for (const f of planilhas) {
+        try {
+          const pl = await parsePlanilha(f)
+          if (pl.parcelas.length) {
+            planilhaData = planilhaData
+              ? { parcelas: [...planilhaData.parcelas, ...pl.parcelas], totalSimples: (planilhaData.totalSimples || 0) + (pl.totalSimples || 0), totalDobro: (planilhaData.totalDobro || 0) + (pl.totalDobro || 0), emDobro: planilhaData.emDobro || pl.emDobro }
+              : pl
+          }
+        } catch (e) { console.warn('Falha ao ler planilha', f.name, e) }
       }
-      const res = await extrairDocumentos({ documentos })
-      if (!res.verbas?.length) {
-        setExtraiErr('A IA não encontrou verbas nos documentos. Você pode preencher manualmente.')
+
+      // 2) PDFs/imagens (inicial, sentença/acórdão) → contexto jurídico via IA
+      let res = { verbas: [] }
+      if (docs.length) {
+        const documentos = []
+        for (const f of docs) documentos.push({ base64: await fileToBase64(f), mediaType: f.type || 'application/pdf', nome: f.name })
+        res = await extrairDocumentos({ documentos })
+      }
+
+      if (!res.verbas?.length && !planilhaData) {
+        setExtraiErr('A IA não encontrou verbas e nenhuma planilha válida foi lida. Você pode preencher manualmente.')
       } else {
-        aplicarExtracao(res)
+        aplicarExtracao(res, planilhaData)
         setStep(3) // revisar verbas/parcelas
       }
     } catch (e) {
@@ -528,16 +603,16 @@ export default function NovoCalculo() {
         {/* STEP 1 — AUTOMÁTICO (upload de documentos) */}
         {step === 1 && modo === 'auto' && (
           <div>
-            <Section badge="IA" eyebrow="EXTRAÇÃO AUTOMÁTICA" title="Enviar Documentos" desc="Anexe a petição inicial, a sentença/acórdão e (se tiver) o extrato. A IA preenche o cálculo." />
+            <Section badge="IA" eyebrow="EXTRAÇÃO AUTOMÁTICA" title="Enviar Documentos" desc="Anexe a PLANILHA de cálculo (.xlsx) da pasta do cliente + a petição inicial + a sentença/acórdão. A planilha dá os descontos exatos; a IA cuida do resto." />
             <label style={{
               display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
               gap: '8px', padding: '28px', border: '2px dashed hsl(var(--border))', borderRadius: '12px',
               cursor: 'pointer', background: 'hsl(var(--secondary))', textAlign: 'center',
             }}>
               <Upload size={26} style={{ color: 'hsl(var(--primary))' }} />
-              <span style={{ fontSize: '14px', fontWeight: 600, color: 'hsl(var(--foreground))' }}>Clique para selecionar PDFs ou imagens</span>
-              <span style={{ fontSize: '12px', color: 'hsl(var(--muted-foreground))' }}>Petição inicial · Sentença/Acórdão · Extrato (PDF nativo ou escaneado)</span>
-              <input type="file" multiple accept=".pdf,image/*" style={{ display: 'none' }}
+              <span style={{ fontSize: '14px', fontWeight: 600, color: 'hsl(var(--foreground))' }}>Clique para selecionar a planilha, PDFs ou imagens</span>
+              <span style={{ fontSize: '12px', color: 'hsl(var(--muted-foreground))' }}>Planilha (.xlsx/.xls/.csv) · Petição inicial · Sentença/Acórdão</span>
+              <input type="file" multiple accept=".pdf,.xlsx,.xls,.csv,image/*" style={{ display: 'none' }}
                 onChange={e => { setArquivos([...arquivos, ...Array.from(e.target.files || [])]); e.target.value = '' }} />
             </label>
 
