@@ -321,6 +321,8 @@ export default function NovoCalculo() {
   const [arquivos, setArquivos] = useState([])      // File[]
   const [extraindo, setExtraindo] = useState(false)
   const [extraiErr, setExtraiErr] = useState('')
+  const [prog, setProg] = useState(0)            // progresso da análise (0–100)
+  const [progMsg, setProgMsg] = useState('')
 
   const [dados, setDados] = useState({
     processo: '', cliente: '', executada: '', vara: '',
@@ -449,12 +451,14 @@ export default function NovoCalculo() {
 
   async function extrairComIA() {
     if (!arquivos.length) return
-    setExtraiErr(''); setExtraindo(true)
+    setExtraiErr(''); setExtraindo(true); setProg(6); setProgMsg('Preparando documentos…')
+    const tick = setInterval(() => setProg(p => Math.min(93, p + Math.random() * 6 + 1.5)), 600)
     try {
       // 1) PLANILHAS (.xlsx/.xls/.csv) → leitura determinística dos descontos
       //    (dado estruturado, sem OCR/IA): parcelas exatas + total simples + em dobro.
       const planilhas = arquivos.filter(isPlanilha)
       const docs = arquivos.filter(f => !isPlanilha(f))
+      if (planilhas.length) { setProgMsg('Lendo a planilha de descontos…'); setProg(p => Math.max(p, 22)) }
       let planilhaData = null
       for (const f of planilhas) {
         try {
@@ -470,21 +474,26 @@ export default function NovoCalculo() {
       // 2) PDFs/imagens (inicial, sentença/acórdão) → contexto jurídico via IA
       let res = { verbas: [] }
       if (docs.length) {
+        setProgMsg('Analisando documentos com a IA…'); setProg(p => Math.max(p, 40))
         const documentos = []
         for (const f of docs) documentos.push({ base64: await fileToBase64(f), mediaType: f.type || 'application/pdf', nome: f.name })
         res = await extrairDocumentos({ documentos })
       }
 
+      setProgMsg('Montando o cálculo…'); setProg(96)
       if (!res.verbas?.length && !planilhaData) {
         setExtraiErr('A IA não encontrou verbas e nenhuma planilha válida foi lida. Você pode preencher manualmente.')
       } else {
         aplicarExtracao(res, planilhaData)
+        setProg(100)
         setStep(3) // revisar verbas/parcelas
       }
     } catch (e) {
       setExtraiErr('Erro na extração: ' + e.message)
     } finally {
+      clearInterval(tick)
       setExtraindo(false)
+      setTimeout(() => { setProg(0); setProgMsg('') }, 800)
     }
   }
 
@@ -650,11 +659,26 @@ export default function NovoCalculo() {
 
             <button className="btn-primary" onClick={extrairComIA} disabled={!arquivos.length || extraindo}
               style={{ marginTop: '16px', height: '44px', fontSize: '14px', width: '100%', justifyContent: 'center', opacity: (!arquivos.length || extraindo) ? 0.5 : 1 }}>
-              {extraindo ? <><Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} /> Lendo documentos com IA…</> : <><Bot size={16} /> Extrair tudo com IA</>}
+              {extraindo ? <><Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} /> Analisando…</> : <><Bot size={16} /> Extrair tudo com IA</>}
             </button>
-            <p style={{ margin: '10px 0 0', fontSize: '12px', color: 'hsl(var(--muted-foreground))', textAlign: 'center' }}>
-              A IA preenche processo, datas, verbas e parcelas. Você revisa no próximo passo antes de calcular.
-            </p>
+
+            {extraindo || prog > 0 ? (
+              <div style={{ marginTop: '14px' }} className="fade-in">
+                <div style={{ height: '10px', background: 'hsl(var(--secondary))', border: '1px solid hsl(var(--border))', borderRadius: '999px', overflow: 'hidden' }}>
+                  <div style={{ height: '100%', width: `${prog}%`, borderRadius: '999px', background: 'linear-gradient(90deg,#0ea5e9,#2563eb)', transition: 'width .5s ease', boxShadow: '0 0 8px hsl(var(--primary) / 0.6)' }} />
+                </div>
+                <p style={{ margin: '8px 0 0', fontSize: '12.5px', color: 'hsl(var(--foreground))', textAlign: 'center', fontWeight: 500 }}>
+                  {Math.round(prog)}% — {progMsg || 'Processando…'}
+                </p>
+                <p style={{ margin: '2px 0 0', fontSize: '11px', color: 'hsl(var(--muted-foreground))', textAlign: 'center' }}>
+                  A leitura da IA leva ~15–25s. Não feche a página.
+                </p>
+              </div>
+            ) : (
+              <p style={{ margin: '10px 0 0', fontSize: '12px', color: 'hsl(var(--muted-foreground))', textAlign: 'center' }}>
+                A planilha (.xlsx) dá os descontos exatos; a IA preenche processo, datas e verbas. Você revisa antes de calcular.
+              </p>
+            )}
           </div>
         )}
 

@@ -11,11 +11,25 @@ const TIPO_LABEL = {
   outro: 'Outra Verba',
 }
 
-function DocBanner({ n, total, title }) {
+// Imprime/gera PDF de UM documento só (esconde os demais no print).
+function imprimirDoc(wrapIndex) {
+  const wraps = [...document.querySelectorAll('.cj-report-wrap')]
+  document.body.classList.add('print-solo')
+  wraps.forEach((w, i) => w.classList.toggle('solo', i === wrapIndex))
+  const limpar = () => { document.body.classList.remove('print-solo'); wraps.forEach(w => w.classList.remove('solo')); window.removeEventListener('afterprint', limpar) }
+  window.addEventListener('afterprint', limpar)
+  window.print()
+  setTimeout(limpar, 1500)
+}
+
+function DocBanner({ n, total, title, onPrint, onWord }) {
   return (
     <div className="doc-banner no-print">
       <span className="doc-pill">Documento {n} de {total}</span>
       <span className="doc-title">{title}</span>
+      <span style={{ flex: 1 }} />
+      <button className="btn-secondary" onClick={onPrint} style={{ fontSize: 12, padding: '5px 10px' }}><Printer size={13} /> Imprimir / PDF</button>
+      <button className="btn-secondary" onClick={onWord} style={{ fontSize: 12, padding: '5px 10px' }}><FileText size={13} /> Word</button>
     </div>
   )
 }
@@ -32,15 +46,15 @@ export default function Relatorio({ relatorio }) {
 
   return (
     <div className="cj-doc" style={{ background: '#e2e8f0', minHeight: '100%' }}>
-      {/* Painel de ações — não imprime */}
+      {/* Painel de ações global — não imprime */}
       <div className="no-print" style={{ padding: '14px 24px', background: '#f8fafc', borderBottom: '1px solid #cbd5e1', position: 'sticky', top: 0, zIndex: 5 }}>
         <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
           <button className="btn-primary" onClick={imprimir} style={{ height: 38, fontSize: 13 }}>
-            <Printer size={14} /> Imprimir / Salvar PDF (todos)
+            <Printer size={14} /> Imprimir tudo (1 PDF)
           </button>
           <div style={{ width: 1, height: 26, background: '#cbd5e1', margin: '0 4px' }} />
           <span style={{ fontSize: 12, fontWeight: 600, color: '#475569', display: 'flex', alignItems: 'center', gap: 6 }}>
-            <Download size={13} /> Baixar Word:
+            <Download size={13} /> Baixar Word (separados):
           </span>
           <button className="btn-primary" onClick={() => baixarWordHtml(peticaoHtml, `Cumprimento_de_Sentenca_${slug}`)} style={{ height: 36, fontSize: 13, background: '#0369a1' }}>
             <Gavel size={14} /> Cumprimento de Sentença
@@ -52,20 +66,22 @@ export default function Relatorio({ relatorio }) {
           ))}
         </div>
         <p style={{ margin: '8px 0 0', fontSize: 12, color: '#64748b' }}>
-          {totalDocs} documento(s): a petição de cumprimento + {reports.length} cálculo(s). Para PDF, use “Imprimir → Salvar como PDF”.
+          {totalDocs} documentos separados. Use os botões de cada documento abaixo para imprimir/baixar individualmente, ou “Imprimir tudo” para um PDF único.
         </p>
       </div>
 
-      {/* DOCUMENTO 1 — Petição de Cumprimento de Sentença */}
-      <DocBanner n={1} total={totalDocs} title="Cumprimento de Sentença (petição)" />
+      {/* DOCUMENTO 1 — Petição de Cumprimento de Sentença (wrap 0) */}
+      <DocBanner n={1} total={totalDocs} title="Cumprimento de Sentença (petição)"
+        onPrint={() => imprimirDoc(0)} onWord={() => baixarWordHtml(peticaoHtml, `Cumprimento_de_Sentenca_${slug}`)} />
       <div className="cj-report-wrap">
         <section className="cj-sheet peticao" dangerouslySetInnerHTML={{ __html: peticaoHtml }} />
       </div>
 
-      {/* DOCUMENTOS 2..N — um cálculo CJ por verba */}
+      {/* DOCUMENTOS 2..N — um cálculo CJ por verba (wraps 1..N) */}
       {reports.map((item, i) => (
         <Fragment key={i}>
-          <DocBanner n={i + 2} total={totalDocs} title={`Cálculo — ${TIPO_LABEL[item.verba.tipo]}`} />
+          <DocBanner n={i + 2} total={totalDocs} title={`Cálculo — ${TIPO_LABEL[item.verba.tipo]}`}
+            onPrint={() => imprimirDoc(i + 1)} onWord={() => baixarWord(`rel-doc-${i}`, `Calculo_${TIPO_LABEL[item.verba.tipo] || 'verba'}_${slug}`)} />
           <div id={`rel-doc-${i}`} className="cj-report-wrap">
             <RelatorioCJ
               meta={meta}
@@ -98,9 +114,9 @@ export default function Relatorio({ relatorio }) {
         }
         .doc-banner .doc-pill {
           background: #0f172a; color: #fff; font-size: 11px; font-weight: 700;
-          letter-spacing: .5px; text-transform: uppercase; padding: 5px 12px; border-radius: 999px;
+          letter-spacing: .5px; text-transform: uppercase; padding: 5px 12px; border-radius: 999px; white-space: nowrap;
         }
-        .doc-banner .doc-title { font-size: 14px; font-weight: 700; color: #334155; }
+        .doc-banner .doc-title { font-size: 14px; font-weight: 700; color: #334155; white-space: nowrap; }
         /* Petição (modelo Times, justificado) */
         .peticao { font-family: 'Times New Roman', Georgia, serif; font-size: 12pt; line-height: 1.55; text-align: justify; color: #111; }
         .peticao p { margin: 0 0 10px; }
@@ -147,9 +163,13 @@ export default function Relatorio({ relatorio }) {
             width: auto; min-height: 0; margin: 0; padding: 0 0 1.2cm;
             box-shadow: none;
           }
-          .cj-break { page-break-after: always; }
-          .cj-report-wrap { page-break-before: always; }
-          .cj-report-wrap:first-of-type { page-break-before: avoid; }
+          .cj-break { break-after: page; page-break-after: always; }
+          /* cada documento começa numa página nova */
+          .cj-report-wrap { break-before: page; page-break-before: always; }
+          .cj-report-wrap:first-of-type { break-before: avoid; page-break-before: avoid; }
+          /* impressão de UM documento só */
+          body.print-solo .cj-report-wrap:not(.solo) { display: none !important; }
+          body.print-solo .cj-report-wrap.solo { break-before: avoid; page-break-before: avoid; }
           .cj-foot { position: static; margin-top: 14px; }
           tr, table { page-break-inside: auto; }
         }
