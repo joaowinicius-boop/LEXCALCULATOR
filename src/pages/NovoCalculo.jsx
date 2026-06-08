@@ -7,7 +7,6 @@ import {
 } from 'lucide-react'
 import { extrairDoDispositivo } from '../utils/extrair.js'
 import { extrairDocumentos, fileToBase64 } from '../lib/extrairDoc.js'
-import { analisarExtrato } from '../lib/extratoFinder.js'
 import { carregarSeries } from '../lib/indices.js'
 import { calcularProcesso, fmtBRL, fmtData } from '../utils/calcularJuridico.js'
 import { useCalculos } from '../hooks/useCalculos.js'
@@ -107,25 +106,14 @@ function ParcelaEditor({ parcelas, onChange }) {
 // ─── Formulário de uma verba ──────────────────────────────────────────────────
 function VerbaForm({ verba, onChange, onRemove }) {
   const upd = (k, v) => onChange({ ...verba, [k]: v })
-  const [imp, setImp] = useState({ loading: false, err: '', info: null, prog: null })
 
-  async function importarExtrato(fileList) {
-    const files = Array.from(fileList || [])
-    if (!files.length) return
-    setImp({ loading: true, err: '', info: null, prog: null })
-    try {
-      const r = await analisarExtrato(files, (page, total) => setImp(s => ({ ...s, prog: { page, total } })))
-      if (!r.parcelas.length) { setImp({ loading: false, err: 'Nenhuma cobrança indevida encontrada no extrato.', info: null, prog: null }); return }
-      onChange({
-        ...verba,
-        descricao: verba.descricao || (r.categorias[0]?.label || 'Cobranças indevidas'),
-        parcelas: r.parcelas.map(p => ({ id: uid(), data: p.data, valor: p.valor })),
-      })
-      setImp({ loading: false, err: '', prog: null, info: { banco: r.banco || '—', qtd: r.parcelas.length, total: r.total, cats: r.categorias } })
-    } catch (e) {
-      setImp({ loading: false, err: e.message, info: null, prog: null })
-    }
-  }
+  // Conferência da soma (Súmula 43): soma das parcelas vs total informado na inicial
+  const nump = (x) => parseFloat(String(x ?? '').replace(',', '.')) || 0
+  const somaParcelas = (verba.parcelas || []).reduce((a, p) => a + nump(p.valor), 0)
+  const totalDecl = nump(verba.totalDeclarado)
+  const temConferencia = totalDecl > 0 && (verba.parcelas || []).length > 0
+  const difer = Math.abs(somaParcelas - totalDecl)
+  const bate = temConferencia && difer <= Math.max(1, totalDecl * 0.01)
 
   return (
     <div className="card-elevated fade-in" style={{ padding: '16px', marginBottom: '12px' }}>
@@ -169,30 +157,23 @@ function VerbaForm({ verba, onChange, onRemove }) {
           Repetição do indébito — em dobro (cada parcela conta 2x)
         </label>
       </div>
-      {/* Importar extrato via LEX FINDER */}
-      <div style={{ marginTop: '12px', padding: '12px 14px', border: '1px dashed hsl(var(--primary) / 0.45)', borderRadius: '10px', background: 'hsl(var(--primary) / 0.05)' }}>
-        <label style={{ display: 'inline-flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '13px', fontWeight: 600, color: 'hsl(var(--primary))' }}>
-          <Upload size={15} /> Importar extrato (LEX FINDER)
-          <input type="file" accept=".pdf" multiple style={{ display: 'none' }} onChange={e => { importarExtrato(e.target.files); e.target.value = '' }} />
-        </label>
-        <p style={{ margin: '4px 0 0', fontSize: '11px', color: 'hsl(var(--muted-foreground))' }}>
-          Suba o extrato bancário — o LEX FINDER detecta o banco e extrai as cobranças indevidas como parcelas (data + valor).
-        </p>
-        {imp.loading && (
-          <p style={{ margin: '8px 0 0', fontSize: '12px', color: 'hsl(var(--primary))', display: 'flex', alignItems: 'center', gap: '6px' }}>
-            <Loader2 size={13} style={{ animation: 'spin 1s linear infinite' }} /> Lendo extrato{imp.prog ? ` (pág. ${imp.prog.page}/${imp.prog.total})` : ''}…
-          </p>
-        )}
-        {imp.err && <p style={{ margin: '8px 0 0', fontSize: '12px', color: 'var(--error)' }}>{imp.err}</p>}
-        {imp.info && (
-          <div style={{ margin: '8px 0 0', fontSize: '12px', color: 'hsl(var(--foreground))' }}>
-            <CheckCircle2 size={13} color="var(--success)" style={{ verticalAlign: '-2px' }} /> <strong>{imp.info.banco}</strong> · {imp.info.qtd} cobranças · total simples <strong className="mono">{fmtBRL(imp.info.total)}</strong>
-            <div style={{ color: 'hsl(var(--muted-foreground))', marginTop: '4px' }}>{imp.info.cats.map(c => `${c.label} (${c.qtd})`).join(' · ')}</div>
-          </div>
-        )}
+      <div style={{ marginTop: '12px' }}>
+        <Field label="Total dos descontos informado na inicial (conferência)" hint="A soma da tabela / valor da restituição declarado na petição — usado para conferir as parcelas">
+          <input type="number" step="0.01" min="0" className="input-lex mono" placeholder="Ex.: 519,64" value={verba.totalDeclarado ?? ''} onChange={e => upd('totalDeclarado', e.target.value)} style={{ maxWidth: 240 }} />
+        </Field>
       </div>
 
       <ParcelaEditor parcelas={verba.parcelas} onChange={(p) => upd('parcelas', p)} />
+
+      {temConferencia && (
+        <div style={{ marginTop: '8px', padding: '8px 12px', borderRadius: '8px', fontSize: '12.5px', display: 'flex', alignItems: 'center', gap: '8px',
+          background: bate ? 'hsl(145 60% 35% / 0.12)' : 'var(--warning-bg)',
+          border: `1px solid ${bate ? 'hsl(145 60% 45% / 0.35)' : 'var(--warning-border)'}`, color: 'hsl(var(--foreground))' }}>
+          {bate ? <CheckCircle2 size={14} color="var(--success)" style={{ flexShrink: 0 }} /> : <AlertCircle size={14} color="var(--warning)" style={{ flexShrink: 0 }} />}
+          <span>Conferência: soma das parcelas <strong className="mono">{fmtBRL(somaParcelas)}</strong> vs total da inicial <strong className="mono">{fmtBRL(totalDecl)}</strong>
+            {bate ? ' — confere ✓' : ` — diverge ${fmtBRL(difer)}; revise as parcelas ou o total informado.`}</span>
+        </div>
+      )}
     </div>
   )
 }
@@ -200,7 +181,7 @@ function VerbaForm({ verba, onChange, onRemove }) {
 // ─── Defaults / mapeamento ─────────────────────────────────────────────────────
 const VERBA_DEFAULT = {
   tipo: 'dano_material', indice: 'INPC', emDobro: true,
-  descricao: '', jurosTipo: 'fixo_1', jurosInicio: '', parcelas: [],
+  descricao: '', jurosTipo: 'fixo_1', jurosInicio: '', totalDeclarado: '', parcelas: [],
 }
 
 function dataDoTermo(termo, dados) {
@@ -291,6 +272,7 @@ export default function NovoCalculo() {
         jurosTipo: v.indice === 'SELIC' && v.tipo === 'dano_moral' ? 'nenhum' : (v.jurosTipo || 'fixo_1'),
         jurosInicio: v.jurosInicio || '',
         descricao: v.descricao || '',
+        totalDeclarado: v.totalDeclarado ?? '',
         parcelas: (v.parcelas || []).map(pc => ({ id: uid(), data: pc.data || '', valor: pc.valor ?? '' })),
       }
     })
