@@ -136,6 +136,7 @@ export function calcularVerbaJuridica(verba, termoFinal) {
       data: p.data,
       valor,
       fator,
+      percentualCorrecao: (fator - 1) * 100,
       valorCorrigido,
       percentualJuros: pctJuros,
       valorJuros,

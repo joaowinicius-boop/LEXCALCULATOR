@@ -106,12 +106,13 @@ function ParcelaEditor({ parcelas, onChange }) {
 // ─── Formulário de uma verba ──────────────────────────────────────────────────
 function VerbaForm({ verba, onChange, onRemove }) {
   const upd = (k, v) => onChange({ ...verba, [k]: v })
+  const isMaterial = isMaterialTipo(verba.tipo)
 
-  // Conferência da soma (Súmula 43): soma das parcelas vs total informado na inicial
+  // Conferência da soma (Súmula 43): soma das parcelas vs total informado na inicial — só material
   const nump = (x) => parseFloat(String(x ?? '').replace(',', '.')) || 0
   const somaParcelas = (verba.parcelas || []).reduce((a, p) => a + nump(p.valor), 0)
   const totalDecl = nump(verba.totalDeclarado)
-  const temConferencia = totalDecl > 0 && (verba.parcelas || []).length > 0
+  const temConferencia = isMaterial && totalDecl > 0 && (verba.parcelas || []).length > 0
   const difer = Math.abs(somaParcelas - totalDecl)
   const bate = temConferencia && difer <= Math.max(1, totalDecl * 0.01)
 
@@ -123,14 +124,15 @@ function VerbaForm({ verba, onChange, onRemove }) {
       </div>
       <Grid cols={2}>
         <Field label="Tipo de verba" required>
-          <select className="input-lex" value={verba.tipo} onChange={e => upd('tipo', e.target.value)}>
+          <select className="input-lex" value={verba.tipo}
+            onChange={e => onChange({ ...verba, tipo: e.target.value, emDobro: e.target.value === 'dano_material' ? verba.emDobro : false })}>
             <option value="dano_moral">Dano Moral</option>
             <option value="dano_material">Dano Material</option>
             <option value="honorarios">Honorários Sucumbenciais</option>
             <option value="outro">Outra Verba</option>
           </select>
         </Field>
-        <Field label="Índice de correção" required>
+        <Field label="Índice de correção" required hint={!isMaterial ? 'Dano moral: usualmente SELIC (englobando juros) ou IPCA-E' : undefined}>
           <select className="input-lex" value={verba.indice} onChange={e => upd('indice', e.target.value)}>
             <option value="INPC">INPC</option>
             <option value="IPCA">IPCA-E</option>
@@ -148,47 +150,64 @@ function VerbaForm({ verba, onChange, onRemove }) {
           </Field>
         )}
         <Field label="Descrição (opcional)">
-          <input className="input-lex" placeholder="Ex.: Seguro Mais Proteção" value={verba.descricao} onChange={e => upd('descricao', e.target.value)} />
+          <input className="input-lex" placeholder={isMaterial ? 'Ex.: Seguro Mais Proteção' : 'Ex.: Dano moral'} value={verba.descricao} onChange={e => upd('descricao', e.target.value)} />
         </Field>
       </Grid>
-      <div style={{ marginTop: '12px' }}>
-        <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '14px' }}>
-          <input type="checkbox" checked={verba.emDobro} onChange={e => upd('emDobro', e.target.checked)} style={{ accentColor: 'hsl(var(--primary))', width: '15px', height: '15px' }} />
-          Repetição do indébito — em dobro (cada parcela conta 2x)
-        </label>
-      </div>
-      <div style={{ marginTop: '12px' }}>
-        <Field label="Total dos descontos informado na inicial" hint="A soma da tabela / valor da restituição declarado na petição — base da geração e da conferência">
-          <input type="number" step="0.01" min="0" className="input-lex mono" placeholder="Ex.: 519,64" value={verba.totalDeclarado ?? ''} onChange={e => upd('totalDeclarado', e.target.value)} style={{ maxWidth: 240 }} />
-        </Field>
-      </div>
 
-      {/* Gerar parcelas mensais a partir do total + período (sem depender de OCR linha a linha) */}
-      <div style={{ marginTop: '10px', padding: '12px 14px', border: '1px dashed hsl(var(--primary) / 0.4)', borderRadius: '10px', background: 'hsl(var(--primary) / 0.05)' }}>
-        <p style={{ margin: '0 0 8px', fontSize: '13px', fontWeight: 600, color: 'hsl(var(--primary))' }}>Gerar parcelas mensais (recomendado p/ descontos mensais)</p>
-        <Grid cols={2}>
-          <Field label="1º desconto (período de)"><input type="date" className="input-lex" value={verba.periodoInicio || ''} onChange={e => upd('periodoInicio', e.target.value)} /></Field>
-          <Field label="Último desconto (período até)"><input type="date" className="input-lex" value={verba.periodoFim || ''} onChange={e => upd('periodoFim', e.target.value)} /></Field>
-        </Grid>
-        <button className="btn-secondary" style={{ marginTop: '10px', fontSize: '12px' }}
-          disabled={!verba.totalDeclarado || !verba.periodoInicio || !verba.periodoFim}
-          onClick={() => { const p = gerarParcelasMensais(verba.totalDeclarado, verba.periodoInicio, verba.periodoFim); if (p.length) upd('parcelas', p) }}>
-          <Plus size={13} /> Gerar parcelas mensais (total ÷ meses)
-        </button>
-        <p style={{ margin: '6px 0 0', fontSize: '11px', color: 'hsl(var(--muted-foreground))' }}>
-          Distribui o total no período em parcelas mensais — a soma bate exatamente com o total e cada parcela é corrigida pela sua data (padrão CJ). Mais confiável que transcrever a tabela escaneada.
-        </p>
-      </div>
+      {isMaterial ? (
+        <>
+          <div style={{ marginTop: '12px' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '14px' }}>
+              <input type="checkbox" checked={verba.emDobro} onChange={e => upd('emDobro', e.target.checked)} style={{ accentColor: 'hsl(var(--primary))', width: '15px', height: '15px' }} />
+              Repetição do indébito — em dobro (cada parcela conta 2x)
+            </label>
+          </div>
+          <div style={{ marginTop: '12px' }}>
+            <Field label="Total dos descontos informado na inicial" hint="A soma da tabela / valor da restituição declarado na petição — base da geração e da conferência">
+              <input type="number" step="0.01" min="0" className="input-lex mono" placeholder="Ex.: 519,64" value={verba.totalDeclarado ?? ''} onChange={e => upd('totalDeclarado', e.target.value)} style={{ maxWidth: 240 }} />
+            </Field>
+          </div>
 
-      <ParcelaEditor parcelas={verba.parcelas} onChange={(p) => upd('parcelas', p)} />
+          {/* Gerar parcelas mensais a partir do total + período (sem depender de OCR linha a linha) */}
+          <div style={{ marginTop: '10px', padding: '12px 14px', border: '1px dashed hsl(var(--primary) / 0.4)', borderRadius: '10px', background: 'hsl(var(--primary) / 0.05)' }}>
+            <p style={{ margin: '0 0 8px', fontSize: '13px', fontWeight: 600, color: 'hsl(var(--primary))' }}>Gerar parcelas mensais (recomendado p/ descontos mensais)</p>
+            <Grid cols={2}>
+              <Field label="1º desconto (período de)"><input type="date" className="input-lex" value={verba.periodoInicio || ''} onChange={e => upd('periodoInicio', e.target.value)} /></Field>
+              <Field label="Último desconto (período até)"><input type="date" className="input-lex" value={verba.periodoFim || ''} onChange={e => upd('periodoFim', e.target.value)} /></Field>
+            </Grid>
+            <button className="btn-secondary" style={{ marginTop: '10px', fontSize: '12px' }}
+              disabled={!verba.totalDeclarado || !verba.periodoInicio || !verba.periodoFim}
+              onClick={() => { const p = gerarParcelasMensais(verba.totalDeclarado, verba.periodoInicio, verba.periodoFim); if (p.length) upd('parcelas', p) }}>
+              <Plus size={13} /> Gerar parcelas mensais (total ÷ meses)
+            </button>
+            <p style={{ margin: '6px 0 0', fontSize: '11px', color: 'hsl(var(--muted-foreground))' }}>
+              Distribui o total no período em parcelas mensais — a soma bate exatamente com o total e cada parcela é corrigida pela sua data (padrão CJ). Mais confiável que transcrever a tabela escaneada.
+            </p>
+          </div>
 
-      {temConferencia && (
-        <div style={{ marginTop: '8px', padding: '8px 12px', borderRadius: '8px', fontSize: '12.5px', display: 'flex', alignItems: 'center', gap: '8px',
-          background: bate ? 'hsl(145 60% 35% / 0.12)' : 'var(--warning-bg)',
-          border: `1px solid ${bate ? 'hsl(145 60% 45% / 0.35)' : 'var(--warning-border)'}`, color: 'hsl(var(--foreground))' }}>
-          {bate ? <CheckCircle2 size={14} color="var(--success)" style={{ flexShrink: 0 }} /> : <AlertCircle size={14} color="var(--warning)" style={{ flexShrink: 0 }} />}
-          <span>Conferência: soma das parcelas <strong className="mono">{fmtBRL(somaParcelas)}</strong> vs total da inicial <strong className="mono">{fmtBRL(totalDecl)}</strong>
-            {bate ? ' — confere ✓' : ` — diverge ${fmtBRL(difer)}; revise as parcelas ou o total informado.`}</span>
+          <ParcelaEditor parcelas={verba.parcelas} onChange={(p) => upd('parcelas', p)} />
+
+          {temConferencia && (
+            <div style={{ marginTop: '8px', padding: '8px 12px', borderRadius: '8px', fontSize: '12.5px', display: 'flex', alignItems: 'center', gap: '8px',
+              background: bate ? 'hsl(145 60% 35% / 0.12)' : 'var(--warning-bg)',
+              border: `1px solid ${bate ? 'hsl(145 60% 45% / 0.35)' : 'var(--warning-border)'}`, color: 'hsl(var(--foreground))' }}>
+              {bate ? <CheckCircle2 size={14} color="var(--success)" style={{ flexShrink: 0 }} /> : <AlertCircle size={14} color="var(--warning)" style={{ flexShrink: 0 }} />}
+              <span>Conferência: soma das parcelas <strong className="mono">{fmtBRL(somaParcelas)}</strong> vs total da inicial <strong className="mono">{fmtBRL(totalDecl)}</strong>
+                {bate ? ' — confere ✓' : ` — diverge ${fmtBRL(difer)}; revise as parcelas ou o total informado.`}</span>
+            </div>
+          )}
+        </>
+      ) : (
+        <div style={{ marginTop: '12px', padding: '12px 14px', border: '1px dashed hsl(var(--primary) / 0.35)', borderRadius: '10px', background: 'hsl(var(--primary) / 0.04)' }}>
+          <p style={{ margin: '0 0 10px', fontSize: '13px', fontWeight: 600, color: 'hsl(var(--primary))' }}>Valor fixo arbitrado na sentença</p>
+          <Grid cols={2}>
+            <Field label="Valor fixado (R$)" required hint="O valor da condenação fixado pelo juiz (sem parcelas)">
+              <input type="number" step="0.01" min="0" className="input-lex mono" placeholder="Ex.: 4.000,00" value={verba.valor ?? ''} onChange={e => upd('valor', e.target.value)} />
+            </Field>
+            <Field label="Data do arbitramento / base" required hint="Correção a partir desta data (Súmula 362 STJ p/ dano moral)">
+              <input type="date" className="input-lex" value={verba.data || ''} onChange={e => upd('data', e.target.value)} />
+            </Field>
+          </Grid>
         </div>
       )}
     </div>
@@ -199,7 +218,21 @@ function VerbaForm({ verba, onChange, onRemove }) {
 const VERBA_DEFAULT = {
   tipo: 'dano_material', indice: 'INPC', emDobro: true,
   descricao: '', jurosTipo: 'fixo_1', jurosInicio: '',
+  // dano material → tabela de descontos (parcelas mensais)
   totalDeclarado: '', periodoInicio: '', periodoFim: '', parcelas: [],
+  // dano moral / honorários / outro → valor fixo arbitrado pelo juiz (sem parcelas)
+  valor: '', data: '',
+}
+
+const isMaterialTipo = (t) => t === 'dano_material'
+
+// Parcelas efetivas de uma verba para o motor:
+//  - material: a tabela de descontos (cada um corrigido pela sua data)
+//  - demais (moral/honorários/outro): UMA parcela = valor fixo na data do arbitramento
+function parcelasDaVerba(v) {
+  if (isMaterialTipo(v.tipo)) return v.parcelas || []
+  const val = parseFloat(String(v.valor).replace(',', '.')) || 0
+  return val > 0 ? [{ id: 'fixo', data: v.data || '', valor: v.valor }] : []
 }
 
 // Gera parcelas MENSAIS que somam EXATAMENTE o total, no período informado.
@@ -288,11 +321,11 @@ export default function NovoCalculo() {
           jurosTipo,
           jurosInicio: dados.dataCitacao || dados.dataDecisao || '',
           descricao: v.descricao || '',
-          // Material = SHELL (lançar parcelas com valores SIMPLES da inicial/extrato).
-          // Demais (moral/outro) = 1 parcela na DATA DA DECISÃO (Súmula 362 STJ).
-          parcelas: (isMaterial || v.valorOriginal == null)
-            ? []
-            : [{ id: uid(), data: dados.dataDecisao || dataDoTermo(v.termoInicial, dados) || '', valor: v.valorOriginal }],
+          // Material = SHELL (parcelas da tabela). Demais = valor fixo na data do
+          // arbitramento/decisão (Súmula 362 STJ) — sem parcelas.
+          parcelas: [],
+          valor: isMaterial ? '' : (v.valorOriginal ?? ''),
+          data: isMaterial ? '' : (dados.dataDecisao || dataDoTermo(v.termoInicial, dados) || ''),
         }
       })
       setDados(d => ({ ...d, verbas: novas }))
@@ -305,6 +338,10 @@ export default function NovoCalculo() {
     const p = res.processo || {}
     const verbas = (res.verbas || []).map(v => {
       const isMaterial = v.tipo === 'dano_material'
+      // Valor fixo (moral/honorários/outro): pega da 1ª parcela da IA (valor + data)
+      const pIA = (v.parcelas || [])[0] || {}
+      const valorFixo = isMaterial ? '' : (pIA.valor ?? '')
+      const dataFixa = isMaterial ? '' : (pIA.data || p.dataDecisao || '')
       return {
         ...VERBA_DEFAULT, id: uid(),
         tipo: v.tipo || 'dano_material',
@@ -313,15 +350,17 @@ export default function NovoCalculo() {
         jurosTipo: v.indice === 'SELIC' && v.tipo === 'dano_moral' ? 'nenhum' : (v.jurosTipo || 'fixo_1'),
         jurosInicio: v.jurosInicio || '',
         descricao: v.descricao || '',
-        totalDeclarado: v.totalDeclarado ?? '',
-        periodoInicio: v.periodoInicio || '',
-        periodoFim: v.periodoFim || '',
+        totalDeclarado: isMaterial ? (v.totalDeclarado ?? '') : '',
+        periodoInicio: isMaterial ? (v.periodoInicio || '') : '',
+        periodoFim: isMaterial ? (v.periodoFim || '') : '',
         // Dano material com total+período → gera parcelas mensais (confiável, sem alucinar linhas)
         parcelas: (isMaterial && v.periodoInicio && v.periodoFim && v.totalDeclarado)
           ? gerarParcelasMensais(v.totalDeclarado, v.periodoInicio, v.periodoFim)
-          : (v.parcelas || []).map(pc => ({ id: uid(), data: pc.data || '', valor: pc.valor ?? '' })),
+          : (isMaterial ? (v.parcelas || []).map(pc => ({ id: uid(), data: pc.data || '', valor: pc.valor ?? '' })) : []),
+        valor: valorFixo,
+        data: dataFixa,
       }
-    }).filter(v => v.parcelas.length > 0 || (parseFloat(String(v.totalDeclarado).replace(',', '.')) || 0) > 0)
+    }).filter(v => parcelasDaVerba(v).length > 0 || (parseFloat(String(v.totalDeclarado).replace(',', '.')) || 0) > 0)
     setDados(d => ({
       ...d,
       processo: p.processo || d.processo,
@@ -378,9 +417,9 @@ export default function NovoCalculo() {
       const series = await carregarSeries([...indices])
       const verbasCalc = dados.verbas.map(v => ({
         tipo: v.tipo, descricao: v.descricao, indice: v.indice,
-        serie: series[v.indice], emDobro: v.emDobro,
+        serie: series[v.indice], emDobro: isMaterialTipo(v.tipo) ? v.emDobro : false,
         juros: { tipo: v.jurosTipo, dataInicio: v.jurosInicio, serieSelic: series.SELIC, serieIpca: series.IPCA },
-        parcelas: v.parcelas.map(p => ({ data: p.data, valor: parseFloat(String(p.valor).replace(',', '.')) || 0 })),
+        parcelas: parcelasDaVerba(v).map(p => ({ data: p.data, valor: parseFloat(String(p.valor).replace(',', '.')) || 0 })),
       }))
       const resultado = calcularProcesso(verbasCalc, { termoFinal, honorariosPercentual: parseFloat(String(dados.honorariosPercentual).replace(',', '.')) || 0 })
       setProc(resultado)
@@ -403,8 +442,15 @@ export default function NovoCalculo() {
     if (!dados.verbas.length) return 'Adicione ao menos uma verba.'
     for (const v of dados.verbas) {
       const nome = TIPO_VERBA[v.tipo] || 'verba'
-      if (!v.parcelas.length) return `A verba "${nome}" está sem parcelas — clique em "Adicionar parcela" e informe data + valor de cada desconto.`
-      if (!v.parcelas.every(p => p.data && parseFloat(String(p.valor).replace(',', '.')) > 0)) return `Preencha data e valor de todas as parcelas em "${nome}".`
+      const parc = parcelasDaVerba(v)
+      if (!parc.length) {
+        return isMaterialTipo(v.tipo)
+          ? `A verba "${nome}" está sem parcelas — informe o total + período e clique em "Gerar parcelas mensais", ou lance os descontos manualmente.`
+          : `Informe o valor fixado e a data do arbitramento em "${nome}".`
+      }
+      if (!parc.every(p => p.data && parseFloat(String(p.valor).replace(',', '.')) > 0)) {
+        return isMaterialTipo(v.tipo) ? `Preencha data e valor de todas as parcelas em "${nome}".` : `Preencha valor e data em "${nome}".`
+      }
       if (v.jurosTipo !== 'nenhum' && !v.jurosInicio) return `Defina "Juros a partir de" em "${nome}".`
     }
     return ''
@@ -413,11 +459,12 @@ export default function NovoCalculo() {
   function canNext() {
     if (step === 1) return dados.cliente.trim() && dados.executada.trim()
     if (step === 2) return dados.dataDecisao && dados.termoFinal
-    if (step === 3) return dados.verbas.length > 0 && dados.verbas.every(v =>
-      v.parcelas.length > 0 &&
-      v.parcelas.every(p => p.data && parseFloat(String(p.valor).replace(',', '.')) > 0) &&
-      (v.jurosTipo === 'nenhum' || v.jurosInicio)
-    )
+    if (step === 3) return dados.verbas.length > 0 && dados.verbas.every(v => {
+      const parc = parcelasDaVerba(v)
+      return parc.length > 0 &&
+        parc.every(p => p.data && parseFloat(String(p.valor).replace(',', '.')) > 0) &&
+        (v.jurosTipo === 'nenhum' || v.jurosInicio)
+    })
     return true
   }
 
@@ -436,7 +483,7 @@ export default function NovoCalculo() {
           <button className="btn-secondary" onClick={reset} style={{ fontSize: 13 }}><FileText size={14} /> Novo cálculo</button>
           <button className="btn-secondary" onClick={() => navigate('/historico')} style={{ fontSize: 13 }}>Histórico <ChevronRight size={14} /></button>
         </div>
-        <Relatorio relatorio={{ meta: { cliente: dados.cliente, processo: dados.processo, executada: dados.executada, vara: dados.vara }, geradoEm, proc }} />
+        <Relatorio relatorio={{ meta: { cliente: dados.cliente, processo: dados.processo, executada: dados.executada, vara: dados.vara, tipoDocumento: dados.tipoDocumento }, geradoEm, proc }} />
       </div>
     )
   }

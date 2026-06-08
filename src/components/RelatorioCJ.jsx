@@ -51,6 +51,14 @@ export default function RelatorioCJ({ meta = {}, geradoEm, termoFinal, verba, re
   const subtotal = resultado.subtotal
   const nomeCalculo = `Cálculo de Atualização de Débitos — ${TIPO_UP[verba.tipo] || 'VERBA'}`
 
+  // Memória de cálculo — taxas explícitas (para o magistrado conferir a conta)
+  const valorOriginal = resultado.linhas.reduce((a, l) => a + l.valor, 0)
+  const correcaoValor = principal - valorOriginal
+  const correcaoPct = valorOriginal ? (correcaoValor / valorOriginal) * 100 : 0
+  const pctJuros = resultado.percentualJuros
+  const datasParc = resultado.linhas.map(l => l.data).filter(Boolean).sort()
+  const corrDe = datasParc[0]
+
   const opcoesJuros = [
     ['Juros de Mora', jurosLabel],
     ['Juros a partir de', jurosInicio ? fmtData(jurosInicio) : '—'],
@@ -63,9 +71,9 @@ export default function RelatorioCJ({ meta = {}, geradoEm, termoFinal, verba, re
   function footnote(l) {
     const jt = verba.juros?.tipo
     const jdesc = (jt && jt !== 'nenhum')
-      ? `Juros (${LABEL_JUROS[jt]}, de ${fmtData(jurosInicio)} até ${fmtData(termoFinal)}), `
+      ? `Juros (${LABEL_JUROS[jt]}, ${fmtPct(l.percentualJuros)}, de ${fmtData(jurosInicio)} até ${fmtData(termoFinal)}), `
       : 'Juros (não aplicado), '
-    return `${jdesc}Correção Monetária (${indiceNome}, de ${fmtData(l.data)} até ${fmtData(termoFinal)}), Juros Compensatórios (não aplicado)`
+    return `${jdesc}Correção Monetária (${indiceNome}, ${fmtPct(l.percentualCorrecao)}, de ${fmtData(l.data)} até ${fmtData(termoFinal)}), Juros Compensatórios (não aplicado)`
   }
 
   return (
@@ -93,6 +101,17 @@ export default function RelatorioCJ({ meta = {}, geradoEm, termoFinal, verba, re
           ['Nome do cálculo', nomeCalculo],
           ['Termo final', fmtData(termoFinal)],
           ['Índice de correção monetária', indiceNome],
+        ]} />
+
+        <h2 style={S.h2}>Resumo do Cálculo (memória)</h2>
+        <KV rows={[
+          verba.emDobro
+            ? ['Soma dos descontos (valor simples)', fmtBRL(valorOriginal / 2)]
+            : [verba.tipo === 'dano_material' ? 'Valor original (soma das parcelas)' : 'Valor arbitrado na sentença', fmtBRL(valorOriginal)],
+          ...(verba.emDobro ? [['Restituição em dobro (art. 42, p. único, CDC)', `2×  →  ${fmtBRL(valorOriginal)}`]] : []),
+          [`Correção monetária — ${verba.indice}${corrDe ? ` (de ${fmtData(corrDe)} a ${fmtData(termoFinal)})` : ''}`, `+ ${fmtPct(correcaoPct)}  →  ${fmtBRL(principal)}`],
+          [`Juros de mora — ${jurosLabel}${jurosInicio && verba.juros?.tipo !== 'nenhum' ? ` (desde ${fmtData(jurosInicio)})` : ''}`, pctJuros > 0 ? `+ ${fmtPct(pctJuros)}  →  ${fmtBRL(juros)}` : 'Não aplicado'],
+          ['Subtotal atualizado', fmtBRL(subtotal)],
         ]} />
 
         <h2 style={S.h2}>Opções do Cálculo</h2>
@@ -181,7 +200,7 @@ export default function RelatorioCJ({ meta = {}, geradoEm, termoFinal, verba, re
                   <td>{l.tipoLinha === 'Repetição de Indébito' ? 'Repetição de Indébito' : (verba.descricao || '—')}</td>
                   <td className="nw">{fmtData(l.data)}</td>
                   <td className="r mono">{fmtBRL(l.valor)}</td>
-                  <td className="r mono">{fmtFator(l.fator)}</td>
+                  <td className="r mono">{fmtFator(l.fator)}<br /><span style={{ fontSize: '6.5pt', color: '#64748b' }}>{fmtPct(l.percentualCorrecao)}</span></td>
                   <td className="r mono">{fmtBRL(l.valorCorrigido)}</td>
                   <td className="r mono">{fmtPct(l.percentualJuros)}</td>
                   <td className="r mono">{fmtBRL(l.valorJuros)}</td>
