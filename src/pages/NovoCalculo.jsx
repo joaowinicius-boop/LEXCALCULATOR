@@ -334,6 +334,19 @@ export default function NovoCalculo() {
     }
   }
 
+  // Explica por que o "Gerar relatórios" está bloqueado (passo 3)
+  function motivoBloqueioStep3() {
+    if (step !== 3) return ''
+    if (!dados.verbas.length) return 'Adicione ao menos uma verba.'
+    for (const v of dados.verbas) {
+      const nome = TIPO_VERBA[v.tipo] || 'verba'
+      if (!v.parcelas.length) return `A verba "${nome}" está sem parcelas — clique em "Adicionar parcela" e informe data + valor de cada desconto.`
+      if (!v.parcelas.every(p => p.data && parseFloat(String(p.valor).replace(',', '.')) > 0)) return `Preencha data e valor de todas as parcelas em "${nome}".`
+      if (v.jurosTipo !== 'nenhum' && !v.jurosInicio) return `Defina "Juros a partir de" em "${nome}".`
+    }
+    return ''
+  }
+
   function canNext() {
     if (step === 1) return dados.processo.trim() && dados.cliente.trim() && dados.executada.trim()
     if (step === 2) return dados.dataDecisao && dados.termoFinal
@@ -565,6 +578,14 @@ export default function NovoCalculo() {
         {saveErr && (
           <div style={{ marginTop: 16, padding: '10px 14px', background: 'var(--error-bg)', border: '1px solid var(--error-border)', borderRadius: '8px', color: 'var(--error)', fontSize: 13, display: 'flex', gap: 8 }}>
             <AlertCircle size={15} style={{ flexShrink: 0, marginTop: 1 }} />{saveErr}
+          </div>
+        )}
+
+        {/* Aviso do que falta no passo 3 */}
+        {step === 3 && motivoBloqueioStep3() && (
+          <div style={{ marginTop: 16, padding: '10px 14px', background: 'var(--warning-bg)', border: '1px solid var(--warning-border)', borderRadius: '8px', color: 'hsl(var(--muted-foreground))', fontSize: 13, display: 'flex', gap: 8 }}>
+            <AlertCircle size={15} style={{ flexShrink: 0, marginTop: 1, color: 'var(--warning)' }} />
+            <span>Para gerar os relatórios: {motivoBloqueioStep3()}</span>
           </div>
         )}
 
