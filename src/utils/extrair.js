@@ -272,6 +272,29 @@ export function extrairDoDispositivo(texto) {
     }
   }
 
+  // ── Dano material sem valor explícito → cria SHELL (valores vêm do extrato) ──
+  // Em peças reais o valor da restituição não aparece no dispositivo: ele é a soma
+  // dos descontos (que ficam no extrato/inicial). Então criamos a verba "vazia"
+  // para o advogado/IA lançar as PARCELAS (valores SIMPLES) no próximo passo.
+  if (!tiposEncontrados.has('dano_material')) {
+    const c = t.toLowerCase()
+    if (/em\s+dobro|repeti[çc][aã]o\s+do\s+ind[eé]bito|restitu|danos?\s+materiais?|valores\s+indevidamente\s+descontados|descontos\s+indevidos/.test(c)) {
+      tiposEncontrados.add('dano_material')
+      verbas.push({
+        tipo: 'dano_material',
+        valorOriginal: null,            // shell — sem valor; parcelas serão lançadas
+        emDobro: /em\s+dobro|ind[eé]bito/.test(c),
+        indice: detectarIndice(t),
+        termoInicial: 'ajuizamento',
+        incluirJuros: true,
+        _emDobroNaSentenca: /em\s+dobro|ind[eé]bito/.test(c),
+        _ipcaSelic: isIpcaSelic(t),
+        _shell: true,
+        _extraido: true,
+      })
+    }
+  }
+
   // ── Avisos ────────────────────────────────────────────────────────────────
   if (verbas.some(v => v._ipcaSelic)) {
     avisos.push(
@@ -279,10 +302,10 @@ export function extrairDoDispositivo(texto) {
       'O calculador aplica IPCA durante todo o período — para precisão, considere verificar no Cálculo Jurídico.'
     )
   }
-  if (verbas.some(v => v._emDobroNaSentenca)) {
+  if (verbas.some(v => v.tipo === 'dano_material')) {
     avisos.push(
-      'Dano material "em dobro": o valor extraído já é o valor condenado (dobro aplicado pela sentença). ' +
-      'O calculador aplica apenas correção monetária sobre esse valor.'
+      'Restituição em dobro: lance as PARCELAS com os valores SIMPLES de cada desconto (da inicial/extrato). ' +
+      'O sistema aplica o dobro automaticamente (cada parcela conta 2×) — não informe o valor já dobrado.'
     )
   }
 

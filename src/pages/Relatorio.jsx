@@ -1,6 +1,7 @@
-import { Printer, FileText } from 'lucide-react'
+import { Printer, FileText, Gavel } from 'lucide-react'
 import RelatorioCJ from '../components/RelatorioCJ.jsx'
-import { imprimir, baixarWord } from '../utils/exportar.js'
+import { imprimir, baixarWord, baixarWordHtml } from '../utils/exportar.js'
+import { gerarCumprimentoHtml } from '../utils/cumprimento.js'
 
 const TIPO_LABEL = {
   dano_moral: 'Danos Morais',
@@ -20,13 +21,16 @@ export default function Relatorio({ relatorio }) {
         <button className="btn-primary" onClick={imprimir} style={{ height: 38, fontSize: 13 }}>
           <Printer size={14} /> Imprimir / Salvar PDF
         </button>
+        <button className="btn-primary" onClick={() => baixarWordHtml(gerarCumprimentoHtml(meta, proc), `Cumprimento_de_Sentenca_${meta.processo || ''}`)} style={{ height: 38, fontSize: 13, background: '#0369a1' }}>
+          <Gavel size={14} /> Word — Cumprimento de Sentença
+        </button>
         {proc.resultados.map((item, i) => (
           <button key={i} className="btn-secondary" onClick={() => baixarWord(`rel-doc-${i}`, `Calculo_${TIPO_LABEL[item.verba.tipo] || 'verba'}_${meta.processo || ''}`)} style={{ fontSize: 13 }}>
             <FileText size={14} /> Word — {TIPO_LABEL[item.verba.tipo]}
           </button>
         ))}
         <span style={{ fontSize: 12, color: '#64748b' }}>
-          {proc.resultados.length} relatório(s). Para PDF, use Imprimir → “Salvar como PDF”.
+          {proc.resultados.length} cálculo(s) + petição. Para PDF, use Imprimir → “Salvar como PDF”.
         </span>
       </div>
 

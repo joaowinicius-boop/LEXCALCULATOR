@@ -43,6 +43,32 @@ export function baixarWord(elementId, filename = 'relatorio-calculo') {
 <body>${conteudo}</body>
 </html>`
 
+  baixarWordHtml(html, filename)
+}
+
+/** Baixa um HTML (string) como .doc (Word), sem depender do DOM. */
+export function baixarWordHtml(conteudo, filename = 'documento') {
+  const html = `<!DOCTYPE html>
+<html xmlns:o="urn:schemas-microsoft-com:office:office"
+      xmlns:w="urn:schemas-microsoft-com:office:word"
+      xmlns="http://www.w3.org/TR/REC-html40">
+<head>
+  <meta charset="utf-8">
+  <title>${filename}</title>
+  <!--[if gte mso 9]><xml><w:WordDocument><w:View>Print</w:View><w:Zoom>100</w:Zoom></w:WordDocument></xml><![endif]-->
+  <style>
+    @page { size: A4; margin: 2.5cm; }
+    body { font-family: 'Times New Roman', serif; font-size: 12pt; color: #000; line-height: 1.5; text-align: justify; }
+    table { border-collapse: collapse; width: 100%; }
+    th, td { border: 1px solid #555; padding: 4px 8px; font-size: 10pt; }
+    th { background: #eee; }
+    h1,h2,h3 { font-family: 'Times New Roman', serif; }
+    .center { text-align: center; } .right { text-align: right; } .b { font-weight: bold; }
+    .mono { font-family: 'Consolas', monospace; }
+  </style>
+</head>
+<body>${conteudo}</body>
+</html>`
   const blob = new Blob(['﻿', html], { type: 'application/msword' })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')

@@ -181,7 +181,7 @@ export default function NovoCalculo() {
     processo: '', cliente: '', executada: '', vara: '',
     tipoDocumento: 'sentenca',
     dataDecisao: '', dataTransito: '', dataCitacao: '', dataAjuizamento: '',
-    termoFinal: hoje, observacoes: '', verbas: [],
+    termoFinal: hoje, honorariosPercentual: '', observacoes: '', verbas: [],
   })
   const upd = (k, v) => setDados(d => ({ ...d, [k]: v }))
 
@@ -201,6 +201,7 @@ export default function NovoCalculo() {
   function avancarParaStep3() {
     if (extracao?.verbas?.length > 0) {
       const novas = extracao.verbas.map(v => {
+        const isMaterial = v.tipo === 'dano_material'
         const jurosTipo = v.tipo === 'honorarios' ? 'nenhum'
           : v.indice === 'SELIC' ? 'nenhum'
           : v.tipo === 'dano_moral' ? 'taxa_legal' : 'fixo_1'
@@ -208,11 +209,16 @@ export default function NovoCalculo() {
           ...VERBA_DEFAULT, id: uid(),
           tipo: v.tipo,
           indice: v.indice,
-          emDobro: !!(v.emDobro || v._emDobroNaSentenca),
+          // "em dobro" é POR VERBA e só vale para dano material (restituição/indébito)
+          emDobro: isMaterial ? !!(v.emDobro || v._emDobroNaSentenca) : false,
           jurosTipo,
           jurosInicio: dados.dataCitacao || dados.dataDecisao || '',
-          descricao: '',
-          parcelas: [{ id: uid(), data: dataDoTermo(v.termoInicial, dados) || dados.dataDecisao || '', valor: v.valorOriginal }],
+          descricao: v.descricao || '',
+          // Material = SHELL (lançar parcelas com valores SIMPLES da inicial/extrato).
+          // Demais (moral/outro) = 1 parcela na DATA DA DECISÃO (Súmula 362 STJ).
+          parcelas: (isMaterial || v.valorOriginal == null)
+            ? []
+            : [{ id: uid(), data: dados.dataDecisao || dataDoTermo(v.termoInicial, dados) || '', valor: v.valorOriginal }],
         }
       })
       setDados(d => ({ ...d, verbas: novas }))
@@ -241,7 +247,7 @@ export default function NovoCalculo() {
         juros: { tipo: v.jurosTipo, dataInicio: v.jurosInicio, serieSelic: series.SELIC, serieIpca: series.IPCA },
         parcelas: v.parcelas.map(p => ({ data: p.data, valor: parseFloat(String(p.valor).replace(',', '.')) || 0 })),
       }))
-      const resultado = calcularProcesso(verbasCalc, { termoFinal })
+      const resultado = calcularProcesso(verbasCalc, { termoFinal, honorariosPercentual: parseFloat(String(dados.honorariosPercentual).replace(',', '.')) || 0 })
       setProc(resultado)
 
       const agora = new Date()
@@ -348,6 +354,7 @@ export default function NovoCalculo() {
               <Field label="Data do ajuizamento" hint="Para correção desde o ajuizamento"><input type="date" className="input-lex" value={dados.dataAjuizamento} onChange={e => upd('dataAjuizamento', e.target.value)} /></Field>
               <Field label="Data da citação" hint="Termo inicial dos juros (art. 405 CC)"><input type="date" className="input-lex" value={dados.dataCitacao} onChange={e => upd('dataCitacao', e.target.value)} /></Field>
               <Field label="Termo final (data do cálculo)" required hint="Até quando atualizar"><input type="date" className="input-lex" value={dados.termoFinal} onChange={e => upd('termoFinal', e.target.value)} /></Field>
+              <Field label="Honorários de sucumbência (%)" hint="Para a petição de cumprimento (opcional)"><input type="number" step="0.01" min="0" className="input-lex mono" placeholder="Ex.: 15" value={dados.honorariosPercentual} onChange={e => upd('honorariosPercentual', e.target.value)} /></Field>
             </Grid>
             <div style={{ marginTop: '16px' }}>
               <Field label="Observações"><textarea className="input-lex" rows={2} value={dados.observacoes} onChange={e => upd('observacoes', e.target.value)} style={{ resize: 'vertical', minHeight: '60px' }} /></Field>
