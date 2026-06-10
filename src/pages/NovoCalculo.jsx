@@ -439,7 +439,9 @@ export default function NovoCalculo() {
       }
     }
 
-    verbas = verbas.filter(v => parcelasDaVerba(v).length > 0 || (parseFloat(String(v.totalDeclarado).replace(',', '.')) || 0) > 0)
+    // Dano material da condenação fica SEMPRE (mesmo sem valores — o usuário importa a
+    // planilha ou preenche); as demais verbas vazias são descartadas.
+    verbas = verbas.filter(v => v.tipo === 'dano_material' || parcelasDaVerba(v).length > 0 || (parseFloat(String(v.totalDeclarado).replace(',', '.')) || 0) > 0)
     setDados(d => ({
       ...d,
       processo: p.processo || d.processo,
