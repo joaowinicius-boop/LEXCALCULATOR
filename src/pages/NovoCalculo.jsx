@@ -134,6 +134,10 @@ function VerbaForm({ verba, onChange, onRemove }) {
   const difer = Math.abs(somaParcelas - totalDecl)
   const bate = temConferencia && difer <= Math.max(1, totalDecl * 0.01)
 
+  // Sanidade: juros do material começando ANTES do 1º desconto = data suspeita (IA pode inventar)
+  const primeiraData = isMaterial ? (verba.parcelas || []).map(p => p.data).filter(Boolean).sort()[0] : null
+  const jurosSuspeitos = isMaterial && verba.jurosTipo !== 'nenhum' && verba.jurosInicio && primeiraData && verba.jurosInicio < primeiraData
+
   return (
     <div className="card-elevated fade-in" style={{ padding: '16px', marginBottom: '12px' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
@@ -163,8 +167,10 @@ function VerbaForm({ verba, onChange, onRemove }) {
           </select>
         </Field>
         {verba.jurosTipo !== 'nenhum' && (
-          <Field label="Juros a partir de" required hint="Citação, evento danoso, etc. (conforme a sentença)">
-            <input type="date" className="input-lex" value={verba.jurosInicio} onChange={e => upd('jurosInicio', e.target.value)} />
+          <Field label="Juros a partir de" required hint={jurosSuspeitos ? undefined : 'Citação, evento danoso, etc. (conforme a sentença)'}>
+            <input type="date" className="input-lex" value={verba.jurosInicio} onChange={e => upd('jurosInicio', e.target.value)}
+              style={jurosSuspeitos ? { borderColor: 'var(--warning)' } : undefined} />
+            {jurosSuspeitos && <p style={{ margin: '4px 0 0', fontSize: '12px', color: 'var(--warning)' }}>⚠️ Anterior ao 1º desconto ({fmtData(primeiraData)}) — confira a data da citação na intimação/AR.</p>}
           </Field>
         )}
         <Field label="Descrição (opcional)">
@@ -445,6 +451,7 @@ export default function NovoCalculo() {
       dataTransito: p.dataTransito || d.dataTransito,
       dataCitacao: p.dataCitacao || d.dataCitacao,
       dataAjuizamento: p.dataAjuizamento || d.dataAjuizamento,
+      honorariosPercentual: (Number(p.honorariosPercentual) > 0 ? p.honorariosPercentual : d.honorariosPercentual),
       verbas,
     }))
   }

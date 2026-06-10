@@ -130,6 +130,11 @@ export function extrairDaPlanilhaRows(rows) {
     const valor = valorDaLinha(r)
     if (data && valor != null && valor > 0) {
       parcelas.push({ data, valor, descricao: colDesc >= 0 ? String(r[colDesc] || '').trim() : '' })
+      continue
+    }
+    // Linha SEM rótulo logo após o TOTAL cujo valor ≈ 2× o total => é o "em dobro"
+    if (!data && totalSimples != null && totalDobro == null && valor != null) {
+      if (Math.abs(valor - totalSimples * 2) <= Math.max(0.05, totalSimples * 0.01)) totalDobro = valor
     }
   }
 

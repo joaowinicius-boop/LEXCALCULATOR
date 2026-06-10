@@ -7,21 +7,6 @@ import {
   ChevronUp, ChevronDown, ArrowRight, Loader2, Trash2
 } from 'lucide-react'
 
-const TODOS = [
-  { id: '0033813-32.2026.8.04.1000', cliente: 'Ana Karenina da Silva Pessoa',      executada: 'Banco Bradesco S/A', data: '04/05/2026', total: 4938.26,   status: 'concluido', verbas: 2,  tipoDoc: 'Sentença' },
-  { id: '0021054-14.2025.8.04.3101', cliente: 'Adailton da Silva Pereira',          executada: 'Banco Bradesco S/A', data: '20/04/2026', total: 39984.86,  status: 'pendente',  verbas: 13, tipoDoc: 'Sentença' },
-  { id: '0015033-82.2024.8.04.1000', cliente: 'Abel Mota Nogueira',                 executada: 'Banco Bradesco S/A', data: '15/04/2026', total: 6067.90,   status: 'concluido', verbas: 8,  tipoDoc: 'Sentença' },
-  { id: '0011339-45.2025.8.04.3101', cliente: 'Claudia Nayara Lira Lemos',          executada: 'Banco Bradesco S/A', data: '10/04/2026', total: 6838.49,   status: 'pendente',  verbas: 9,  tipoDoc: 'Sentença' },
-  { id: '0017435-21.2025.8.04.3101', cliente: 'Zeildo Almeida Freitas',             executada: 'Banco Bradesco S/A', data: '01/04/2026', total: 30974.44,  status: 'pendente',  verbas: 7,  tipoDoc: 'Sentença' },
-  { id: '0023358-91.2025.8.04.1000', cliente: 'Alexandre Luis Barbosa Nogueira',    executada: 'Banco Bradesco S/A', data: '25/03/2026', total: 2579.95,   status: 'concluido', verbas: 6,  tipoDoc: 'Sentença' },
-  { id: '0014264-76.2025.8.04.3101', cliente: 'Acrimilson Barros Martins',          executada: 'Banco Bradesco S/A', data: '18/03/2026', total: 14264.76,  status: 'pendente',  verbas: 7,  tipoDoc: 'Sentença' },
-  { id: '0026479-18.2024.8.04.1000', cliente: 'Adair Lima Oliveira',                executada: 'Banco Bradesco S/A', data: '10/03/2026', total: 26479.18,  status: 'concluido', verbas: 7,  tipoDoc: 'Acórdão'  },
-  { id: '0021853-56.2025.8.04.1000', cliente: 'Adriano Guerra Lopes',               executada: 'Banco Bradesco S/A', data: '01/03/2026', total: 21853.56,  status: 'pendente',  verbas: 8,  tipoDoc: 'Sentença' },
-  { id: '0100822-55.2024.8.04.3101', cliente: 'Carlemberg Dias Vieira',             executada: 'Banco Bradesco S/A', data: '20/02/2026', total: 100822.55, status: 'concluido', verbas: 9,  tipoDoc: 'Acórdão'  },
-  { id: '0195952-02.2024.8.04.1000', cliente: 'Carlos Alberto Mota de Jesus',       executada: 'Banco Bradesco S/A', data: '15/02/2026', total: 195952.02, status: 'pendente',  verbas: 12, tipoDoc: 'Acórdão'  },
-  { id: '0130278-20.2024.8.04.3101', cliente: 'George Pedraca Leal',                executada: 'Banco Bradesco S/A', data: '05/02/2026', total: 130278.20, status: 'concluido', verbas: 11, tipoDoc: 'Sentença' },
-]
-
 function Badge({ status }) {
   if (status === 'concluido') return <span className="badge badge-success"><CheckCircle2 size={10} />Pago</span>
   return <span className="badge badge-warning"><Clock size={10} />Pendente</span>
@@ -196,7 +181,7 @@ export default function Historico() {
             <table className="tbl">
               <thead>
                 <tr>
-                  {thSort('id', 'Processo')}
+                  {thSort('processo', 'Processo')}
                   {thSort('cliente', 'Cliente')}
                   <th>Executada</th>
                   <th>Doc.</th>
@@ -216,8 +201,8 @@ export default function Historico() {
                 {filtered.map((c, i) => (
                   <tr key={c.id} style={{ animation: `fadeUp 0.3s ease ${i * 0.025}s forwards`, opacity: 0 }}>
                     <td>
-                      <span className="mono" style={{ fontSize: '12px', color: 'hsl(var(--muted-foreground))' }}>
-                        {c.id.substring(0, 14)}…
+                      <span className="mono" style={{ fontSize: '12px', color: 'hsl(var(--muted-foreground))', whiteSpace: 'nowrap' }}>
+                        {c.processo}
                       </span>
                     </td>
                     <td style={{ fontWeight: 500, maxWidth: '220px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
@@ -272,7 +257,7 @@ export default function Historico() {
           color: 'hsl(var(--muted-foreground))',
         }}>
           <span>{filtered.length} de {TODOS.length} registros</span>
-          <span>Dados demonstrativos</span>
+          <span>{loading ? 'Carregando…' : 'Sincronizado com o banco'}</span>
         </div>
       </div>
     </div>
