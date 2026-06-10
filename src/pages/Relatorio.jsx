@@ -51,6 +51,7 @@ export default function Relatorio({ relatorio }) {
       await baixarCumprimentoDocx(meta, proc, `Cumprimento_de_Sentenca_${slug}`)
     } catch (e) {
       console.warn('Falha no modelo timbrado, usando fallback HTML:', e)
+      window.alert(`Não foi possível carregar o modelo timbrado NG (${e.message}) — baixando a versão simples. Recarregue a página e tente de novo para obter o timbrado.`)
       baixarWordHtml(peticaoHtml, `Cumprimento_de_Sentenca_${slug}`)
     }
   }

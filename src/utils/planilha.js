@@ -37,6 +37,57 @@ function parseNum(v) {
 
 const norm = (s) => String(s ?? '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '').trim()
 
+const MES_NUM = {
+  janeiro: 1, fevereiro: 2, marco: 3, abril: 4, maio: 5, junho: 6,
+  julho: 7, agosto: 8, setembro: 9, outubro: 10, novembro: 11, dezembro: 12,
+}
+
+/**
+ * Layout MATRIZ: linhas = meses (JANEIRO..DEZEMBRO, podendo repetir), colunas = anos.
+ * Ex.: "TABELA PARCELA CRED PESSOAL": MESES | 2019 | 2020 | 2021 | 2022 | 2024.
+ * Gera uma parcela por célula preenchida (dia 28, neutro p/ correção mensal).
+ */
+function extrairMatriz(rows, totalSimples = null) {
+  let hdr = -1, anos = []   // anos[i] = { col, ano }
+  for (let i = 0; i < Math.min(rows.length, 20); i++) {
+    const found = []
+    rows[i].forEach((c, j) => {
+      const n = typeof c === 'number' ? c : parseInt(String(c).trim(), 10)
+      if (Number.isInteger(n) && n >= 1990 && n <= 2100 && String(c).trim().length === 4) found.push({ col: j, ano: n })
+    })
+    if (found.length >= 2 || (found.length === 1 && /mes/.test(norm(rows[i][0])))) { hdr = i; anos = found; break }
+  }
+  if (hdr < 0 || !anos.length) return null
+
+  // Duas leituras: ESTRITA (só células numéricas — espelha o SOMA do Excel, que ignora
+  // texto) e SOLTA (aceita números formatados como texto). Escolhe a que bate com o
+  // VALOR TOTAL declarado; sem total, prefere a estrita.
+  const coletar = (aceitaTexto) => {
+    const out = []
+    for (let i = hdr + 1; i < rows.length; i++) {
+      const mes = MES_NUM[norm(rows[i][0])]
+      if (!mes) continue                                 // ignora VALOR ANUAL/TOTAL/etc.
+      for (const { col, ano } of anos) {
+        const c = rows[i][col]
+        const v = aceitaTexto ? parseNum(c) : (typeof c === 'number' && isFinite(c) ? Math.round(c * 100) / 100 : null)
+        if (v != null && v > 0) out.push({ data: `${ano}-${String(mes).padStart(2, '0')}-28`, valor: v, descricao: '' })
+      }
+    }
+    return out
+  }
+  const soma = (arr) => Math.round(arr.reduce((a, p) => a + p.valor, 0) * 100) / 100
+  const estrita = coletar(false), solta = coletar(true)
+  let parcelas = estrita.length ? estrita : solta
+  if (totalSimples != null) {
+    const tol = Math.max(0.02, totalSimples * 0.001)
+    if (Math.abs(soma(estrita) - totalSimples) <= tol) parcelas = estrita
+    else if (Math.abs(soma(solta) - totalSimples) <= tol) parcelas = solta
+  }
+  if (!parcelas.length) return null
+  parcelas.sort((a, b) => a.data.localeCompare(b.data))
+  return parcelas
+}
+
 /** Núcleo testável: recebe linhas (array de arrays) e devolve a extração. */
 export function extrairDaPlanilhaRows(rows) {
   rows = (rows || []).filter(r => Array.isArray(r))
@@ -65,14 +116,14 @@ export function extrairDaPlanilhaRows(rows) {
     return null
   }
 
-  const parcelas = []
+  let parcelas = []
   let totalSimples = null, totalDobro = null
 
   for (let i = (hdr >= 0 ? hdr + 1 : 0); i < rows.length; i++) {
     const r = rows[i]
     const txt = norm(r.join(' '))
     if (/em\s*dobro/.test(txt)) { const n = valorDaLinha(r); if (n != null) totalDobro = n; continue }
-    if (/(valor\s*total|total\s*geral|^total\b|\btotal\b)/.test(txt) && !/parc/.test(txt)) {
+    if (/(valor\s*total|total\s*geral|^total\b|\btotal\b)/.test(txt) && !/parc|anual/.test(txt)) {
       const n = valorDaLinha(r); if (n != null) { totalSimples = n; continue }
     }
     const data = dataDaLinha(r)
@@ -80,6 +131,12 @@ export function extrairDaPlanilhaRows(rows) {
     if (data && valor != null && valor > 0) {
       parcelas.push({ data, valor, descricao: colDesc >= 0 ? String(r[colDesc] || '').trim() : '' })
     }
+  }
+
+  // Layout matriz (meses × anos) quando não há colunas Data/Valor por linha
+  if (!parcelas.length) {
+    const m = extrairMatriz(rows, totalSimples)
+    if (m) parcelas = m
   }
 
   const somaParcelas = Math.round(parcelas.reduce((a, p) => a + p.valor, 0) * 100) / 100
