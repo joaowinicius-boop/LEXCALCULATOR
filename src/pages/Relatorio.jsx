@@ -3,6 +3,7 @@ import { Printer, FileText, Gavel, Download } from 'lucide-react'
 import RelatorioCJ from '../components/RelatorioCJ.jsx'
 import { imprimir, baixarWord, baixarWordHtml } from '../utils/exportar.js'
 import { gerarCumprimentoHtml } from '../utils/cumprimento.js'
+import { baixarCumprimentoDocx } from '../utils/cumprimentoDocx.js'
 
 const TIPO_LABEL = {
   dano_moral: 'Danos Morais',
@@ -44,6 +45,16 @@ export default function Relatorio({ relatorio }) {
   const totalDocs = reports.length + 1
   const slug = (meta.processo || '').replace(/[^\d]/g, '') || 's-n'
 
+  // Petição em .docx REAL com o timbrado NG (modelo do escritório). Fallback: .doc HTML.
+  async function baixarPeticao() {
+    try {
+      await baixarCumprimentoDocx(meta, proc, `Cumprimento_de_Sentenca_${slug}`)
+    } catch (e) {
+      console.warn('Falha no modelo timbrado, usando fallback HTML:', e)
+      baixarWordHtml(peticaoHtml, `Cumprimento_de_Sentenca_${slug}`)
+    }
+  }
+
   return (
     <div className="cj-doc" style={{ background: '#e2e8f0', minHeight: '100%' }}>
       {/* Painel de ações global — não imprime */}
@@ -56,8 +67,8 @@ export default function Relatorio({ relatorio }) {
           <span style={{ fontSize: 12, fontWeight: 600, color: '#475569', display: 'flex', alignItems: 'center', gap: 6 }}>
             <Download size={13} /> Baixar Word (separados):
           </span>
-          <button className="btn-primary" onClick={() => baixarWordHtml(peticaoHtml, `Cumprimento_de_Sentenca_${slug}`)} style={{ height: 36, fontSize: 13, background: '#0369a1' }}>
-            <Gavel size={14} /> Cumprimento de Sentença
+          <button className="btn-primary" onClick={baixarPeticao} style={{ height: 36, fontSize: 13, background: '#0369a1' }}>
+            <Gavel size={14} /> Cumprimento de Sentença (timbrado NG)
           </button>
           {reports.map((item, i) => (
             <button key={i} className="btn-secondary" onClick={() => baixarWord(`rel-doc-${i}`, `Calculo_${TIPO_LABEL[item.verba.tipo] || 'verba'}_${slug}`)} style={{ fontSize: 13 }}>
@@ -72,7 +83,7 @@ export default function Relatorio({ relatorio }) {
 
       {/* DOCUMENTO 1 — Petição de Cumprimento de Sentença (wrap 0) */}
       <DocBanner n={1} total={totalDocs} title="Cumprimento de Sentença (petição)"
-        onPrint={() => imprimirDoc(0)} onWord={() => baixarWordHtml(peticaoHtml, `Cumprimento_de_Sentenca_${slug}`)} />
+        onPrint={() => imprimirDoc(0)} onWord={baixarPeticao} />
       <div className="cj-report-wrap">
         <section className="cj-sheet peticao" dangerouslySetInnerHTML={{ __html: peticaoHtml }} />
       </div>
