@@ -12,6 +12,9 @@
  */
 import { fmtBRL } from './calcularJuridico.js'
 import { valorExtenso } from './cumprimento.js'
+// Modelo do escritório EMBUTIDO no bundle (data URI) — o download nunca depende de
+// arquivo no servidor (sem SPA-fallback, sem corrida com deploy, sem cache velho).
+import modeloInline from '../assets/modelo_cumprimento.docx?inline'
 
 const MESES = ['janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho', 'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro']
 
@@ -89,13 +92,12 @@ export function variaveisCumprimento(meta = {}, proc) {
 
 /** Baixa a petição .docx com timbrado, preenchida com os valores do cálculo. */
 export async function baixarCumprimentoDocx(meta = {}, proc, filename) {
-  const resp = await fetch('/modelo_cumprimento.docx', { cache: 'no-cache' })
-  if (!resp.ok) throw new Error('Modelo do escritório não encontrado (modelo_cumprimento.docx).')
+  const resp = await fetch(modeloInline)
   const buf = await resp.arrayBuffer()
 
-  // Assinatura ZIP ("PK") — evita aceitar o index.html do SPA fallback como modelo
+  // Assinatura ZIP ("PK") — sanidade do asset embutido
   const sig = new Uint8Array(buf.slice(0, 2))
-  if (sig[0] !== 0x50 || sig[1] !== 0x4b) throw new Error('Resposta não é um .docx válido (deploy em andamento?). Recarregue a página.')
+  if (sig[0] !== 0x50 || sig[1] !== 0x4b) throw new Error('Modelo embutido inválido — recompile o app.')
 
   const { default: JSZip } = await import('jszip')
   const zip = await JSZip.loadAsync(buf)

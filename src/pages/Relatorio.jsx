@@ -4,6 +4,7 @@ import RelatorioCJ from '../components/RelatorioCJ.jsx'
 import { imprimir, baixarWord, baixarWordHtml } from '../utils/exportar.js'
 import { gerarCumprimentoHtml } from '../utils/cumprimento.js'
 import { baixarCumprimentoDocx } from '../utils/cumprimentoDocx.js'
+import timbradoNg from '../assets/timbrado_ng.png'
 
 const TIPO_LABEL = {
   dano_moral: 'Danos Morais',
@@ -13,11 +14,27 @@ const TIPO_LABEL = {
 }
 
 // Imprime/gera PDF de UM documento só (esconde os demais no print).
+// Para a PETIÇÃO, imprime com o TIMBRADO NG em todas as páginas (imagem fixa +
+// página sem margem, com o recuo do conteúdo feito via padding).
 function imprimirDoc(wrapIndex) {
   const wraps = [...document.querySelectorAll('.cj-report-wrap')]
+  const alvo = wraps[wrapIndex]
+  const comTimbrado = !!alvo?.querySelector('.peticao')
   document.body.classList.add('print-solo')
+  let st = null
+  if (comTimbrado) {
+    document.body.classList.add('print-timbrado')
+    st = document.createElement('style')
+    st.textContent = '@media print { @page { margin: 0 } }'
+    document.head.appendChild(st)
+  }
   wraps.forEach((w, i) => w.classList.toggle('solo', i === wrapIndex))
-  const limpar = () => { document.body.classList.remove('print-solo'); wraps.forEach(w => w.classList.remove('solo')); window.removeEventListener('afterprint', limpar) }
+  const limpar = () => {
+    document.body.classList.remove('print-solo', 'print-timbrado')
+    wraps.forEach(w => w.classList.remove('solo'))
+    if (st) st.remove()
+    window.removeEventListener('afterprint', limpar)
+  }
   window.addEventListener('afterprint', limpar)
   window.print()
   setTimeout(limpar, 1500)
@@ -82,11 +99,14 @@ export default function Relatorio({ relatorio }) {
         </p>
       </div>
 
-      {/* DOCUMENTO 1 — Petição de Cumprimento de Sentença (wrap 0) */}
-      <DocBanner n={1} total={totalDocs} title="Cumprimento de Sentença (petição)"
+      {/* DOCUMENTO 1 — Petição de Cumprimento de Sentença (wrap 0), com timbrado NG */}
+      <DocBanner n={1} total={totalDocs} title="Cumprimento de Sentença (petição · timbrado NG)"
         onPrint={() => imprimirDoc(0)} onWord={baixarPeticao} />
       <div className="cj-report-wrap">
-        <section className="cj-sheet peticao" dangerouslySetInnerHTML={{ __html: peticaoHtml }} />
+        <section className="cj-sheet peticao">
+          <img className="timbrado-print" src={timbradoNg} alt="" />
+          <div className="peticao-body" dangerouslySetInnerHTML={{ __html: peticaoHtml }} />
+        </section>
       </div>
 
       {/* DOCUMENTOS 2..N — um cálculo CJ por verba (wraps 1..N) */}
@@ -129,8 +149,18 @@ export default function Relatorio({ relatorio }) {
           letter-spacing: .5px; text-transform: uppercase; padding: 5px 12px; border-radius: 999px; white-space: nowrap;
         }
         .doc-banner .doc-title { font-size: 14px; font-weight: 700; color: #334155; white-space: nowrap; }
-        /* Petição (modelo Times, justificado) */
-        .peticao { font-family: 'Times New Roman', Georgia, serif; font-size: 12pt; line-height: 1.55; text-align: justify; color: #111; }
+        /* Petição (modelo do escritório, com TIMBRADO NG) */
+        .peticao {
+          font-family: 'Cambria', 'Times New Roman', Georgia, serif; font-size: 12pt; line-height: 1.55; text-align: justify; color: #111;
+          background-image: url(${timbradoNg});
+          background-size: 21cm 29.7cm;
+          background-repeat: repeat-y;
+          background-position: top center;
+          -webkit-print-color-adjust: exact; print-color-adjust: exact;
+          padding: 3.4cm 1.9cm 3.8cm !important;
+        }
+        .timbrado-print { display: none; }
+        .peticao-body { position: relative; }
         .peticao p { margin: 0 0 10px; }
         .peticao .center { text-align: center; }
         .peticao .right { text-align: right; }
@@ -182,6 +212,17 @@ export default function Relatorio({ relatorio }) {
           /* impressão de UM documento só */
           body.print-solo .cj-report-wrap:not(.solo) { display: none !important; }
           body.print-solo .cj-report-wrap.solo { break-before: avoid; page-break-before: avoid; }
+          /* petição com TIMBRADO: imagem fixa sai em TODAS as páginas; conteúdo recuado */
+          body.print-timbrado .timbrado-print {
+            display: block !important;
+            position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            z-index: -1;
+            -webkit-print-color-adjust: exact; print-color-adjust: exact;
+          }
+          body.print-timbrado .cj-sheet.peticao {
+            background: none !important;
+            padding: 3.4cm 1.9cm 3.8cm !important;
+          }
           .cj-foot { position: static; margin-top: 14px; }
           tr, table { page-break-inside: auto; }
         }

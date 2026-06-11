@@ -75,6 +75,7 @@ body = doctag + '<w:body>' + ''.join(P) + sectpr + '</w:body></w:document>'
 newdoc = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\r\n' + body
 
 os.makedirs('public', exist_ok=True)
+os.makedirs('src/assets', exist_ok=True)
 out = 'public/modelo_cumprimento.docx'
 if os.path.exists(out): os.remove(out)
 sep = os.sep
@@ -87,6 +88,8 @@ with zipfile.ZipFile(out, 'w', zipfile.ZIP_DEFLATED) as z:
                 z.writestr(arc, newdoc)
             else:
                 z.write(full, arc)
-print('gerado', out, os.path.getsize(out), 'bytes')
+import shutil
+shutil.copy(out, 'src/assets/modelo_cumprimento.docx')  # embutido no bundle (?inline)
+print('gerado', out, '+ src/assets/modelo_cumprimento.docx', os.path.getsize(out), 'bytes')
 toks = sorted(set(re.findall(r'\(\([A-Z_]+\)\)', newdoc)))
 print('tokens:', toks)
