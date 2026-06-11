@@ -1,9 +1,99 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext.jsx'
-import { Scale, Mail, Lock, AlertCircle, Loader2, ChevronRight, Eye, EyeOff } from 'lucide-react'
+import { Scale, Mail, Lock, AlertCircle, Loader2, ChevronRight, Eye, EyeOff, Gavel, Landmark, BookOpen, FileText } from 'lucide-react'
+import logoNg from '../assets/logo_ng.png'
 
 // Decorative dots for left panel
+
+// ── Carrossel jurídico do painel de login ────────────────────────────────────
+const SLIDES = [
+  { logo: true,       titulo: 'Nicolas Gomes — Advogado', sub: 'Cumprimento de sentença no padrão do escritório' },
+  { Icon: Gavel,      titulo: 'Sentenças e acórdãos',     sub: 'A IA lê a decisão e monta o cálculo para sua revisão' },
+  { Icon: Landmark,   titulo: 'Índices oficiais',         sub: 'INPC, IPCA e SELIC direto do Banco Central' },
+  { Icon: BookOpen,   titulo: 'Súmulas do STJ aplicadas', sub: 'Correção e juros conforme as Súmulas 43, 54 e 362' },
+  { Icon: FileText,   titulo: 'Petição timbrada NG',      sub: 'Word e PDF preenchidos automaticamente após o cálculo' },
+]
+
+function Slideshow() {
+  const [i, setI] = useState(0)
+  useEffect(() => {
+    const t = setInterval(() => setI(v => (v + 1) % SLIDES.length), 4200)
+    return () => clearInterval(t)
+  }, [])
+  return (
+    <div>
+      <div style={{ position: 'relative', height: '92px' }}>
+        {SLIDES.map((sl, j) => (
+          <div key={j} style={{
+            position: 'absolute', inset: 0,
+            display: 'flex', alignItems: 'center', gap: '16px',
+            opacity: i === j ? 1 : 0,
+            transform: i === j ? 'translateY(0)' : 'translateY(10px)',
+            transition: 'opacity .8s ease, transform .8s ease',
+            pointerEvents: 'none',
+          }}>
+            <div style={{
+              width: '64px', height: '64px', borderRadius: '16px', flexShrink: 0,
+              background: 'hsl(var(--primary) / 0.10)',
+              border: '1px solid hsl(var(--primary) / 0.30)',
+              boxShadow: '0 0 24px hsl(var(--primary) / 0.25)',
+              display: 'flex', alignItems: 'center', justifyContent: 'center',
+            }}>
+              {sl.logo
+                ? <img src={logoNg} alt="NG" style={{ width: '40px', height: 'auto' }} />
+                : <sl.Icon size={30} color="hsl(199 89% 55%)" strokeWidth={1.6} />}
+            </div>
+            <div>
+              <p style={{ margin: 0, fontSize: '15px', fontWeight: 700, color: 'hsl(var(--foreground))' }}>{sl.titulo}</p>
+              <p style={{ margin: '3px 0 0', fontSize: '12.5px', color: 'hsl(var(--muted-foreground))', maxWidth: '320px' }}>{sl.sub}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+      <div style={{ display: 'flex', gap: '6px', marginTop: '10px' }}>
+        {SLIDES.map((_, j) => (
+          <div key={j} style={{
+            width: i === j ? '22px' : '7px', height: '7px', borderRadius: '999px',
+            background: i === j ? 'hsl(var(--primary))' : 'hsl(var(--primary) / 0.25)',
+            transition: 'all .5s ease',
+          }} />
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// Ícones jurídicos flutuando ao fundo + marca d'água NG
+function FundoJuridico() {
+  const itens = [
+    { Icon: Gavel,    top: '12%', left: '68%', size: 34, dur: '9s',  delay: '0s'   },
+    { Icon: Scale,    top: '30%', left: '84%', size: 28, dur: '11s', delay: '1.4s' },
+    { Icon: Landmark, top: '58%', left: '74%', size: 38, dur: '10s', delay: '0.7s' },
+    { Icon: BookOpen, top: '74%', left: '60%', size: 26, dur: '12s', delay: '2.1s' },
+    { Icon: FileText, top: '44%', left: '58%', size: 24, dur: '9.5s', delay: '3s'  },
+  ]
+  return (
+    <>
+      <img src={logoNg} alt="" style={{
+        position: 'absolute', right: '-40px', bottom: '6%',
+        width: '300px', opacity: 0.05, filter: 'grayscale(40%)',
+        animation: 'ng-drift 14s ease-in-out infinite',
+        pointerEvents: 'none',
+      }} />
+      {itens.map(({ Icon, ...st }, k) => (
+        <Icon key={k} size={st.size} strokeWidth={1.2}
+          style={{
+            position: 'absolute', top: st.top, left: st.left,
+            color: 'hsl(199 89% 55% / 0.14)',
+            animation: `ng-float ${st.dur} ease-in-out ${st.delay} infinite`,
+            pointerEvents: 'none',
+          }} />
+      ))}
+    </>
+  )
+}
+
 function DotsGrid() {
   const dots = []
   for (let r = 0; r < 8; r++) {
@@ -85,6 +175,7 @@ export default function Login() {
           background: 'radial-gradient(circle, hsl(217 91% 60% / 0.12) 0%, transparent 70%)',
           pointerEvents: 'none',
         }} />
+        <FundoJuridico />
 
         {/* Content */}
         <div style={{
@@ -159,8 +250,8 @@ export default function Login() {
             </div>
           </div>
 
-          {/* Bottom — dots grid */}
-          <div><DotsGrid /></div>
+          {/* Bottom — carrossel jurídico */}
+          <Slideshow />
         </div>
       </div>
 
@@ -305,6 +396,14 @@ export default function Login() {
       </div>
 
       <style>{`
+        @keyframes ng-float {
+          0%, 100% { transform: translateY(0) rotate(-3deg); }
+          50%      { transform: translateY(-16px) rotate(4deg); }
+        }
+        @keyframes ng-drift {
+          0%, 100% { transform: translateY(0) scale(1); }
+          50%      { transform: translateY(-12px) scale(1.03); }
+        }
         @media (min-width: 1024px) {
           .left-panel { display: block !important; }
           .mobile-logo { display: none !important; }
