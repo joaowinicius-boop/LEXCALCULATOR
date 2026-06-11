@@ -7,9 +7,28 @@ import {
   ChevronUp, ChevronDown, ArrowRight, Loader2, Trash2
 } from 'lucide-react'
 
-function Badge({ status }) {
-  if (status === 'concluido') return <span className="badge badge-success"><CheckCircle2 size={10} />Pago</span>
-  return <span className="badge badge-warning"><Clock size={10} />Pendente</span>
+export const STATUS_OPCOES = [
+  { v: 'pendente',    l: 'Em aberto',   cor: 'var(--warning)' },
+  { v: 'protocolado', l: 'Protocolado', cor: 'hsl(var(--primary))' },
+  { v: 'concluido',   l: 'Pago',        cor: 'var(--success)' },
+  { v: 'arquivado',   l: 'Arquivado',   cor: 'hsl(var(--muted-foreground))' },
+]
+const statusInfo = (v) => STATUS_OPCOES.find(o => o.v === v) || STATUS_OPCOES[0]
+
+// Seletor de status inline — clique e troque direto na linha
+function StatusSelect({ status, onChange }) {
+  const info = statusInfo(status)
+  return (
+    <select value={info.v} onChange={e => onChange(e.target.value)}
+      title="Alterar status"
+      style={{
+        background: 'hsl(var(--secondary))', color: info.cor, fontWeight: 600,
+        border: `1px solid ${info.cor}`, borderRadius: '999px', padding: '3px 8px',
+        fontSize: '12px', cursor: 'pointer', appearance: 'auto',
+      }}>
+      {STATUS_OPCOES.map(o => <option key={o.v} value={o.v}>{o.l}</option>)}
+    </select>
+  )
 }
 
 function TipoDocBadge({ tipo }) {
@@ -29,7 +48,7 @@ function TipoDocBadge({ tipo }) {
 
 export default function Historico() {
   const navigate = useNavigate()
-  const { calculos, loading, excluirCalculo } = useCalculos()
+  const { calculos, loading, excluirCalculo, atualizarStatus } = useCalculos()
   const [excluindo, setExcluindo] = useState(null)
 
   async function handleExcluir(c) {
@@ -55,6 +74,7 @@ export default function Historico() {
     verbas:   c.verbas?.length ?? 0,
     tipoDoc:  c.tipo_documento === 'acordao' ? 'Acórdão' : 'Sentença',
     created_at: c.created_at,
+    raw: c,
   }))
 
   const filtered = TODOS
@@ -159,9 +179,11 @@ export default function Historico() {
           {/* Segmented control */}
           <div className="seg-ctrl">
             {[
-              { v: 'todos',     l: `Todos ${TODOS.length}`   },
-              { v: 'pendente',  l: `Pendente ${TODOS.filter(c=>c.status==='pendente').length}` },
-              { v: 'concluido', l: `Pago ${TODOS.filter(c=>c.status==='concluido').length}`    },
+              { v: 'todos',       l: `Todos ${TODOS.length}` },
+              { v: 'pendente',    l: `Em aberto ${TODOS.filter(c=>c.status==='pendente').length}` },
+              { v: 'protocolado', l: `Protocolado ${TODOS.filter(c=>c.status==='protocolado').length}` },
+              { v: 'concluido',   l: `Pago ${TODOS.filter(c=>c.status==='concluido').length}` },
+              { v: 'arquivado',   l: `Arquivado ${TODOS.filter(c=>c.status==='arquivado').length}` },
             ].map(f => (
               <button key={f.v} className={`seg-btn${filtro === f.v ? ' active' : ''}`} onClick={() => setFiltro(f.v)}>
                 {f.l}
@@ -216,13 +238,13 @@ export default function Historico() {
                         {fmt(c.total)}
                       </span>
                     </td>
-                    <td><Badge status={c.status} /></td>
+                    <td><StatusSelect status={c.status} onChange={(v) => atualizarStatus(c.id, v)} /></td>
                     <td style={{ color: 'hsl(var(--muted-foreground))', fontSize: '13px', whiteSpace: 'nowrap' }}>{c.data}</td>
                     <td>
                       <div style={{ display: 'flex', alignItems: 'center', gap: '2px' }}>
                         <button
-                          onClick={() => navigate('/novo')}
-                          title="Abrir"
+                          onClick={() => navigate('/novo', { state: { abrir: c.raw } })}
+                          title="Abrir o cálculo"
                           style={{ background: 'transparent', border: 'none', cursor: 'pointer', color: 'hsl(var(--muted-foreground))', padding: '4px', borderRadius: '6px', display: 'flex', alignItems: 'center', transition: 'color 0.1s' }}
                           onMouseEnter={e => e.currentTarget.style.color = 'hsl(var(--primary))'}
                           onMouseLeave={e => e.currentTarget.style.color = 'hsl(var(--muted-foreground))'}

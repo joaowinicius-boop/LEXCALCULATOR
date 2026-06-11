@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useState, useEffect, useRef } from 'react'
+import { useNavigate, useLocation } from 'react-router-dom'
 import {
   ChevronRight, ChevronLeft, Plus, Trash2, Check,
   FileText, Scale, Info, AlertCircle, Loader2, Sparkles, CheckCircle2, XCircle,
@@ -506,13 +506,13 @@ export default function NovoCalculo() {
     }
   }
 
-  async function gerarRelatorios() {
+  async function gerarRelatorios(d = dados, { salvar = true } = {}) {
     setSaveErr(''); setSaving(true)
     try {
-      const termoFinal = dados.termoFinal || hoje
+      const termoFinal = d.termoFinal || hoje
       const indices = new Set()
       let precisaSelic = false, precisaIpca = false
-      for (const v of dados.verbas) {
+      for (const v of d.verbas) {
         indices.add(v.indice)
         if (v.jurosTipo === 'taxa_legal') { precisaSelic = true; precisaIpca = true }
         if (v.jurosTipo === 'selic') precisaSelic = true
@@ -521,19 +521,22 @@ export default function NovoCalculo() {
       if (precisaIpca) indices.add('IPCA')
 
       const series = await carregarSeries([...indices])
-      const verbasCalc = dados.verbas.map(v => ({
+      const verbasCalc = d.verbas.map(v => ({
         tipo: v.tipo, descricao: v.descricao, indice: v.indice,
         serie: series[v.indice], emDobro: isMaterialTipo(v.tipo) ? v.emDobro : false,
         juros: { tipo: v.jurosTipo, dataInicio: v.jurosInicio, serieSelic: series.SELIC, serieIpca: series.IPCA },
         parcelas: parcelasDaVerba(v).map(p => ({ data: p.data, valor: parseFloat(String(p.valor).replace(',', '.')) || 0 })),
       }))
-      const resultado = calcularProcesso(verbasCalc, { termoFinal, honorariosPercentual: parseFloat(String(dados.honorariosPercentual).replace(',', '.')) || 0 })
+      const honPct = parseFloat(String(d.honorariosPercentual).replace(',', '.')) || 0
+      const resultado = calcularProcesso(verbasCalc, { termoFinal, honorariosPercentual: honPct })
       setProc(resultado)
 
       const agora = new Date()
       setGeradoEm(`${agora.toLocaleDateString('pt-BR')}, às ${agora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`)
 
-      try { await salvarCalculo(dados, dados.verbas, resultado.totalGeral, { termoFinal }) } catch (e) { console.warn('Falha ao salvar:', e) }
+      if (salvar) {
+        try { await salvarCalculo(d, d.verbas, resultado.totalGeral, { termoFinal, honorariosPercentual: honPct }) } catch (e) { console.warn('Falha ao salvar:', e) }
+      }
       setStep(4)
     } catch (e) {
       setSaveErr('Erro ao gerar/buscar índices: ' + e.message)
@@ -541,6 +544,43 @@ export default function NovoCalculo() {
       setSaving(false)
     }
   }
+
+  // ── Abrir um cálculo SALVO (clique na setinha do Histórico) ──
+  // Restaura processo + verbas do banco e regenera os relatórios direto (sem duplicar
+  // o registro). Se faltar algo (registros antigos), cai no passo 3 para completar.
+  const abriuRef = useRef(false)
+  const location = useLocation()
+  useEffect(() => {
+    const c = location.state?.abrir
+    if (!c || abriuRef.current) return
+    abriuRef.current = true
+    const dc = c.dados_calculo || {}
+    const verbas = (dc.verbas || []).map(v => {
+      const nv = { ...VERBA_DEFAULT, ...v, id: uid(), parcelas: (v.parcelas || []).map(p => ({ ...p, id: uid() })) }
+      // compat: registros antigos guardavam moral/honorários como 1 parcela
+      if (!isMaterialTipo(nv.tipo) && !nv.valor && (v.parcelas || [])[0]) {
+        nv.valor = v.parcelas[0].valor
+        nv.data = v.parcelas[0].data
+      }
+      return nv
+    })
+    const d = {
+      processo: c.processo || '', cliente: c.cliente || '', executada: c.executada || '', vara: c.vara || '',
+      tipoDocumento: c.tipo_documento || 'sentenca',
+      dataDecisao: c.data_decisao || '', dataTransito: c.data_transito || '',
+      dataCitacao: c.data_citacao || '', dataAjuizamento: c.data_ajuizamento || '',
+      termoFinal: dc.termoFinal || hoje,
+      honorariosPercentual: dc.honorariosPercentual ?? '',
+      observacoes: c.observacoes || '', verbas,
+    }
+    setDados(d)
+    const completo = verbas.length > 0 && verbas.every(v => {
+      const parc = parcelasDaVerba(v)
+      return parc.length > 0 && parc.every(p => p.data && parseFloat(String(p.valor).replace(',', '.')) > 0) && (v.jurosTipo === 'nenhum' || v.jurosInicio)
+    })
+    setStep(3)                                       // mostra as verbas enquanto calcula
+    if (completo) gerarRelatorios(d, { salvar: false })
+  }, [location.state])
 
   // Explica por que o "Gerar relatórios" está bloqueado (passo 3)
   function motivoBloqueioStep3() {

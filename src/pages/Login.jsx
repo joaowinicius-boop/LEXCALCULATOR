@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext.jsx'
-import { Scale, Mail, Lock, AlertCircle, Loader2, ChevronRight } from 'lucide-react'
+import { Scale, Mail, Lock, AlertCircle, Loader2, ChevronRight, Eye, EyeOff } from 'lucide-react'
 
 // Decorative dots for left panel
 function DotsGrid() {
@@ -38,6 +38,7 @@ export default function Login() {
   const [senha,   setSenha]   = useState('')
   const [erro,    setErro]    = useState('')
   const [loading, setLoading] = useState(false)
+  const [verSenha, setVerSenha] = useState(false)
 
   async function handleSubmit(e) {
     e.preventDefault()
@@ -268,13 +269,21 @@ export default function Login() {
                     pointerEvents: 'none',
                   }} />
                   <input
-                    type="password"
+                    type={verSenha ? 'text' : 'password'}
                     value={senha}
                     onChange={e => setSenha(e.target.value)}
                     className="input-lex input-icon"
                     placeholder="••••••••"
+                    style={{ paddingRight: '40px' }}
                     required
                   />
+                  <button type="button" onClick={() => setVerSenha(v => !v)}
+                    title={verSenha ? 'Ocultar senha' : 'Mostrar senha'}
+                    style={{ position: 'absolute', right: '10px', top: '50%', transform: 'translateY(-50%)',
+                      background: 'transparent', border: 'none', cursor: 'pointer', padding: '4px',
+                      color: 'hsl(var(--muted-foreground))', display: 'flex', alignItems: 'center' }}>
+                    {verSenha ? <EyeOff size={16} /> : <Eye size={16} />}
+                  </button>
                 </div>
               </div>
 
