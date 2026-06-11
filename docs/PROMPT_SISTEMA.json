@@ -1,0 +1,143 @@
+{
+  "$comment": "PROMPT DE CONSTRUÇÃO DO LEX CALCULATOR — cole este JSON em outra conversa para dar contexto completo do sistema. Versão: 2026-06-11.",
+
+  "projeto": {
+    "nome": "LEX CALCULATOR",
+    "dono": "Nicolas Gomes Sociedade Individual de Advocacia (OAB/AM 796/2022) — advogado Nicolas Santos Carvalho Gomes, OAB/AM 8.926",
+    "objetivo": "Automatizar o cumprimento de sentença consumerista (descontos bancários indevidos): ler inicial + sentença/acórdão + planilha de descontos, calcular a atualização IDÊNTICA ao sistema 'Cálculo Jurídico' (CJ) e gerar 3 documentos — petição de cumprimento com timbrado NG + relatório de cálculo de danos materiais + relatório de danos morais.",
+    "premissa_de_ouro": "O cálculo deve bater CENTAVO A CENTAVO com o Cálculo Jurídico. A planilha (.xlsx) da pasta do cliente é a FONTE DE VERDADE dos descontos; a IA dá só o contexto jurídico e o advogado revisa tudo antes de gerar."
+  },
+
+  "stack": {
+    "frontend": "React 19 + Vite 6 (SPA), lucide-react para ícones, sem framework CSS (estilos inline + CSS vars)",
+    "backend": "Supabase — projeto ref gnebvpqmaxxyzuxjrjid (auth por e-mail/senha, Postgres com RLS, 3 Edge Functions em Deno)",
+    "deploy": "Vercel, projeto 'lexcalculator' (awlegaltech-5909s-projects), produção https://lexcalculator.vercel.app, deploy automático no push para main",
+    "repo": "https://github.com/joaowinicius-boop/LEXCALCULATOR (branch main)",
+    "ia": "OpenAI gpt-4o com leitura nativa de PDF + function calling forçado (NÃO usar Anthropic — decisão do dono)",
+    "libs_chave": ["jszip (gera .docx no browser)", "xlsx/SheetJS (lê planilhas, import dinâmico)", "@supabase/supabase-js"]
+  },
+
+  "banco_de_dados": {
+    "tabelas": {
+      "calculos": "id uuid, processo, cliente, executada, vara, tipo_documento ('sentenca'|'acordao'), data_decisao, data_transito, data_citacao, data_ajuizamento, observacoes, status CHECK in (pendente, protocolado, concluido, arquivado), total_atualizado numeric, dados_calculo jsonb {verbas[], termoFinal, honorariosPercentual}, user_id -> auth.users",
+      "verbas": "resumo por verba (calculo_id FK, tipo, valor_original, em_dobro, indice, incluir_juros) — o detalhe completo vive em calculos.dados_calculo",
+      "profiles": "espelho de auth.users via trigger handle_new_user (security definer, EXECUTE revogado de anon/authenticated)",
+      "rate_limits": "key PK, window_start, count — RLS ligado SEM policies (só service role acessa)"
+    },
+    "rls": "Todas as policies usam (select auth.uid()) = user_id (initplan otimizado). verbas via EXISTS no calculo pai. Índices: calculos(user_id, created_at desc), verbas(calculo_id).",
+    "funcao_rate_limit": "hit_rate_limit(p_key, p_max, p_window_seconds) -> boolean, security definer, janela fixa, EXECUTE revogado de anon/authenticated"
+  },
+
+  "edge_functions": {
+    "indices": {
+      "o_que_faz": "Proxy das séries do BACEN SGS: INPC=188, IPCA=433, SELIC=4390 (% ao mês). Devolve {serie: {'AAAA-MM': variacao_pct}, meses}.",
+      "armadilha_critica": "O SGS limita cada consulta a ~10 ANOS e acima disso devolve ERRO EM XML com HTTP 200. SEMPRE buscar em blocos de 9 anos e mesclar, com retry e detecção de resposta começando com '<'.",
+      "seguranca": "rate limit 240/h por usuário/IP"
+    },
+    "calcular": {
+      "o_que_faz": "Espelho do motor para integrações externas. POST {processo?, verbas[], termoFinal?, honorariosPercentual?, incluirHtml?} -> totais + linhas (+ html e htmlPorVerba se incluirHtml).",
+      "seguranca": "rate limit 60/h, máx 25 verbas / 2.500 parcelas, aceita anon (reservado p/ integração n8n que ainda NÃO existe — pode-se fechar para authenticated)"
+    },
+    "extrair-doc": {
+      "o_que_faz": "Extração por IA: POST {documentos:[{base64, mediaType, nome}], texto?} -> {processo, verbas} no contrato do sistema. PDFs anexados nativamente (type:'file' com data URI base64); imagens via image_url; tool_choice FORÇADO na função registrar_calculo.",
+      "seguranca": "EXIGE usuário autenticado (anon=401, protege o crédito OpenAI), 10 extrações/h por usuário, máx 5 docs / ~12MB base64, texto truncado em 100k",
+      "secret": "OPENAI_API_KEY configurada como secret do Supabase (nunca no front)"
+    },
+    "cors": "Todas restritas a https://lexcalculator.vercel.app + http://localhost:* (server-to-server passa, browser de outros sites não)"
+  },
+
+  "motor_de_calculo": {
+    "arquivo": "src/utils/calcularJuridico.js (puro, recebe séries prontas) — espelhado na edge function calcular",
+    "correcao_monetaria": "fator = PRODUTO das variações mensais do índice, do MÊS DO DESCONTO (inclusive) até o ÚLTIMO MÊS FECHADO antes do termo final. Cada parcela corrigida pela SUA data (Súmula 43 STJ). Validado com erro ZERO contra relatório real do CJ (13 fatores conferidos).",
+    "juros_tipos": {
+      "fixo_1": "1% ao mês SIMPLES × meses inteiros (sem pro-rata) desde jurosInicio — bate exato com o CJ",
+      "taxa_legal": "SELIC acumulada − IPCA acumulado no período (Lei 14.905/2024), piso 0 — difere ~R$2 do CJ por capitalização diária da SELIC (aceito pelo dono)",
+      "selic": "SELIC acumulada (já engloba correção — usar com índice neutro)",
+      "nenhum": "sem juros"
+    },
+    "juros_incidem_sobre": "o valor JÁ CORRIGIDO (padrão CJ)",
+    "em_dobro": "REGRA TRAVADA: parcela guarda o valor SIMPLES; emDobro=true duplica cada linha (Principal + 'Repetição de Indébito'). NUNCA dobrar o valor antes — o erro clássico é usar o 'VALOR EM DOBRO' da inicial como base e dobrar de novo (4×).",
+    "honorarios_sucumbenciais": "% sobre (principal corrigido + juros) de todas as verbas",
+    "dano_moral": "VALOR FIXO arbitrado pelo juiz (sem parcelas!) + data do arbitramento (Súmula 362 STJ — correção desde o arbitramento; juros conforme a decisão: citação, evento danoso/Súmula 54 ou arbitramento)"
+  },
+
+  "extracao_ia_regras_do_prompt": {
+    "licao_mestra": "LLM vision ALUCINA ao transcrever tabela escaneada longa (inventa/estende meses, quase dobra a conta). NUNCA pedir transcrição linha a linha. Pedir só os DOIS totais do rodapé em campos separados: valorTotalSimples ('VALOR TOTAL') e valorEmDobro ('VALOR EM DOBRO') — o SISTEMA decide a base (usa o simples; se só veio dobro, divide por 2).",
+    "dispositivo_prevalece": "Acórdãos têm contradições internas (fundamentação R$4.000 vs dispositivo R$1.000) — o valor do DISPOSITIVO sempre vence.",
+    "enderecamento": "Cumprimento corre no JUÍZO DE ORIGEM (1º grau) — copiar o endereçamento da INICIAL, nunca a Turma Recursal do acórdão. Lacuna '____ª Vara' -> omitir o número.",
+    "honorarios_percentuais": "Honorários em % (art. 55 Lei 9.099/95) NÃO viram verba — vão para processo.honorariosPercentual. Verba 'honorarios' só para valor fixo em reais. Juizado 1º grau normalmente NÃO tem honorários.",
+    "indice_omisso": "Se a decisão não disser o índice -> INPC (não inventar SELIC/IPCA).",
+    "juros_mapeamento_literal": "'1% ao mês' -> fixo_1 | 'taxa legal'/'art. 406 CC'/'Lei 14.905' -> taxa_legal | 'SELIC englobando correção' -> selic. jurosInicio: 'da citação' -> data da citação (se não constar, VAZIO — não inventar); 'evento danoso'/S.54 -> 1º desconto (mês/ano -> dia 01); 'a partir desta data' -> data do próprio acórdão.",
+    "nunca_criar": "verba para astreintes ou multa do art. 523",
+    "saida": "function calling FORÇADO (registrar_calculo) com enum nos campos — a IA preenche um formulário, nunca texto livre"
+  },
+
+  "parser_planilha": {
+    "arquivo": "src/utils/planilha.js — leitura DETERMINÍSTICA (sem IA) da planilha da pasta do cliente, que é a origem da tabela da inicial",
+    "layouts_suportados": [
+      "LISTA: cabeçalho Data|Descrição|Operação|Valor, uma linha por desconto",
+      "MATRIZ: linhas = meses (JANEIRO..DEZEMBRO, podem repetir), colunas = anos; célula = valor do desconto (dia 28 convencionado)",
+      "totais: linha 'VALOR TOTAL' (simples) e 'VALOR EM DOBRO' (com ou SEM rótulo — heurística: número ≈ 2× o total logo após)"
+    ],
+    "armadilha": "Células com número FORMATADO COMO TEXTO não entram no SOMA do Excel — na matriz, ler só células numéricas (modo estrito) e escolher a leitura cuja soma bate com o VALOR TOTAL declarado",
+    "regra": "parcelas SEMPRE com valor simples; emDobro detectado vai para a flag. Conferência obrigatória: soma das parcelas == totalDeclarado (tolerância max(1, 1%))"
+  },
+
+  "documentos_gerados": {
+    "peticao_cumprimento": {
+      "fonte": "modelo real do escritório 'CUMP VOLUNTARIO SIMPLES.docx' com TIMBRADO NG (cabeçalho-imagem de página inteira)",
+      "tecnica": "o pacote .docx original é mantido INTACTO (estilos/cabeçalho/timbrado); só o corpo é tokenizado com ((CLIENTE)), ((PROCESSO)), ((VARA)), ((MORAL_ORIG/ATU)), ((MATERIAL_ORIG/ATU)), ((HONORARIOS)), ((HON_PCT)), ((TOTAL_EXT)), ((DATA_EXT)), ((FRASE_MORAL/MATERIAL/HONORARIOS)). Em runtime o JSZip troca tokens e remove linhas da tabela de verbas ausentes (cortar o <w:tr> que contém o marcador — CUIDADO: casar só '<w:tr>'/'<w:tr ' senão pega <w:trPr> e CORROMPE o Word).",
+      "embutido": "o template .docx vai DENTRO do bundle (vite ?inline + assetsInclude ['**/*.docx']) — download nunca depende do servidor/deploy; validar assinatura 'PK' antes de usar",
+      "regenerar": "scripts/gerar-modelo-cumprimento.py reconstrói o template quando o escritório atualizar o modelo",
+      "frases_condicionais": "sem honorários -> 'Não há honorários... (arts. 54 e 55 da Lei 9.099/95)' e linhas da tabela removidas",
+      "valor_por_extenso": "valorExtenso() em src/utils/cumprimento.js (pt-BR completo)"
+    },
+    "relatorios_cj": {
+      "componente": "src/components/RelatorioCJ.jsx — réplica fiel do layout do Cálculo Jurídico: 4 folhas por verba (dados/opções, totais, tabela de débitos parcela a parcela com fator 6 casas + % por linha, detalhes)",
+      "transparencia": "seção 'Resumo do Cálculo (memória)' com taxas EXPLÍCITAS (índice + % acumulado, juros % e período, dobro 2×) — exigência: o magistrado precisa conferir a conta",
+      "layout_tabela": "table-layout:fixed + colgroup [8,11,10,11,10,12,8,10,8,12]% + nowrap em datas/valores (senão números vazam da folha)"
+    },
+    "tela_relatorios": "3 documentos SEPARADOS com banner 'DOCUMENTO X DE N', cada um com Imprimir/PDF e Word próprios; petição com timbrado em FAIXAS no fluxo (topo=logo, rodapé=contatos — NUNCA fundo repetido a cada 29,7cm, o texto flui contínuo e sobrepõe); impressão solo da petição usa imagem fixa por página + espaçadores thead/tfoot + @page margin 0"
+  },
+
+  "fluxo_do_usuario": {
+    "wizard": "4 passos: 1-Processo (manual ou Automático com upload), 2-Decisão/datas/honorários%, 3-Verbas (revisão), 4-Relatórios",
+    "modo_automatico": "planilha + inicial + decisão juntas -> planilha lida LOCALMENTE (parcelas exatas) + PDFs para a IA (contexto) -> merge: planilha SOBREPÕE os números da IA no dano material -> passo 3 para revisar -> gerar. Barra de progresso com etapas durante a análise (~15-25s).",
+    "verba_material": "tabela de descontos + em dobro + total declarado + botão Importar planilha (recomendado) + fallback gerar parcelas mensais (total ÷ meses do período)",
+    "verba_moral_honorarios": "valor FIXO + data do arbitramento (sem parcelas, sem dobro)",
+    "guardas_ui": "conferência soma==total; aviso 'juros antes do 1º desconto' (IA inventa data); aviso fonte=pdf 'confira, prefira a planilha'; motivo do bloqueio do botão Gerar explicado",
+    "historico": "lista por usuário com nº CNJ, 4 status editáveis inline, busca, exclusão com confirmação, e setinha que REABRE o cálculo salvo (restaura dados_calculo, recalcula com índices atuais, NÃO duplica o registro)"
+  },
+
+  "credenciais_e_segredos": {
+    "regra": "NUNCA colocar chave/senha em código, chat ou repo. OPENAI_API_KEY = secret do Supabase. Anon key é pública por design (por isso extrair-doc exige login). Senha do usuário foi exposta na tela de login no passado — já removida; trocar a senha e ativar leaked-password protection no painel."
+  },
+
+  "licoes_aprendidas_nao_repetir": [
+    "BACEN SGS: janela máx ~10 anos, erro vem em XML com HTTP 200 — sempre blocos de 9 anos + detectar '<'",
+    "IA transcrevendo tabela escaneada = meses inventados (dobrou a conta) — extrair só totais+período, sistema gera/planilha fornece as parcelas",
+    "'VALOR EM DOBRO' da inicial JÁ é o dobro — usar como base e dobrar de novo dá 4×",
+    "lastIndexOf('<w:tr') casa com '<w:trPr' e corrompe o docx — casar tag exata",
+    "SPA fallback do Vercel devolve index.html com HTTP 200 para arquivo inexistente — validar bytes (assinatura PK) e/ou embutir assets no bundle",
+    "Histórico mostrava UUID em vez do nº CNJ — usuário achava que excluir não funcionava",
+    "Fundo de página repetido a cada 29,7cm NÃO acompanha texto contínuo na tela — timbrado em faixas no fluxo; impressão usa position:fixed + thead/tfoot",
+    "gpt-4o varia entre execuções (datas de citação) — campos sempre editáveis + avisos de sanidade",
+    "Excel ignora células-texto no SOMA — parser deve espelhar isso na matriz"
+  ],
+
+  "pendencias_e_roadmap": [
+    "Trocar a senha do usuário e ativar leaked password protection (painel Supabase)",
+    "Fechar calcular/indices para authenticated (n8n nunca foi criado)",
+    "Suíte de testes automatizados (vitest): fatorCorrecao, percentualJuros, gerarParcelasMensais, parser planilha",
+    "Campo '(−) compensação/créditos a abater' (acórdãos que mandam compensar valores depositados pelo banco)",
+    "Opção 'atualizar cálculo existente' em vez de criar registro novo a cada geração",
+    "KPIs do Dashboard ainda só agrupam pendente/concluido (protocolado/arquivado fora)",
+    "Multa e honorários do art. 523 (fase pós-intimação) não calculados"
+  ],
+
+  "estilo_de_trabalho_do_dono": {
+    "idioma": "português brasileiro",
+    "preferencias": "JUST DO IT — decidir e executar sem perguntar o óbvio; deploy frequente (commit+push = produção); testar cada etapa no browser com casos REAIS antes de entregar; nunca quebrar o que funciona; relatórios devem ser idênticos ao CJ; OpenAI, não Anthropic, para a extração",
+    "validacao": "sempre conferir contra o gabarito (sentença/acórdão real + planilha real) e reportar com tabela esperado × obtido"
+  }
+}
