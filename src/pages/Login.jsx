@@ -301,20 +301,6 @@ export default function Login() {
             </form>
           </div>
 
-          {/* Demo hint */}
-          <div style={{
-            marginTop: '16px',
-            padding: '12px 16px',
-            background: 'hsl(var(--secondary))',
-            border: '1px solid hsl(var(--border))',
-            borderRadius: '10px',
-            fontSize: '13px',
-            color: 'hsl(var(--muted-foreground))',
-          }}>
-            <span style={{ color: 'hsl(var(--primary))', fontWeight: 600 }}>Acesso:</span>{' '}
-            <span className="mono" style={{ color: 'hsl(var(--foreground))' }}>nicolasgomesadv@gmail.com</span>{' '}
-            / <span className="mono" style={{ color: 'hsl(var(--foreground))' }}>lexcalculator123</span>
-          </div>
         </div>
       </div>
 
