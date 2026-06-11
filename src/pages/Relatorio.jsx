@@ -5,6 +5,8 @@ import { imprimir, baixarWord, baixarWordHtml } from '../utils/exportar.js'
 import { gerarCumprimentoHtml } from '../utils/cumprimento.js'
 import { baixarCumprimentoDocx } from '../utils/cumprimentoDocx.js'
 import timbradoNg from '../assets/timbrado_ng.png'
+import timbradoTopo from '../assets/timbrado_topo.png'
+import timbradoRodape from '../assets/timbrado_rodape.png'
 
 const TIPO_LABEL = {
   dano_moral: 'Danos Morais',
@@ -104,8 +106,18 @@ export default function Relatorio({ relatorio }) {
         onPrint={() => imprimirDoc(0)} onWord={baixarPeticao} />
       <div className="cj-report-wrap">
         <section className="cj-sheet peticao">
+          {/* impressão solo: timbrado inteiro fixo (sai em todas as páginas) */}
           <img className="timbrado-print" src={timbradoNg} alt="" />
-          <div className="peticao-body" dangerouslySetInnerHTML={{ __html: peticaoHtml }} />
+          {/* tela / impressão geral: faixas em FLUXO (nunca sobrepõem o texto) */}
+          <img className="pet-strip" src={timbradoTopo} alt="" />
+          <table className="pet-table">
+            <thead><tr><td style={{ padding: 0, border: 'none' }}><div className="sp-head" /></td></tr></thead>
+            <tfoot><tr><td style={{ padding: 0, border: 'none' }}><div className="sp-foot" /></td></tr></tfoot>
+            <tbody><tr><td className="pet-cell">
+              <div className="peticao-body" dangerouslySetInnerHTML={{ __html: peticaoHtml }} />
+            </td></tr></tbody>
+          </table>
+          <img className="pet-strip rodape" src={timbradoRodape} alt="" />
         </section>
       </div>
 
@@ -149,26 +161,27 @@ export default function Relatorio({ relatorio }) {
           letter-spacing: .5px; text-transform: uppercase; padding: 5px 12px; border-radius: 999px; white-space: nowrap;
         }
         .doc-banner .doc-title { font-size: 14px; font-weight: 700; color: #334155; white-space: nowrap; }
-        /* Petição (modelo do escritório, com TIMBRADO NG) */
+        /* Petição (modelo do escritório, com TIMBRADO NG em faixas no fluxo) */
         .peticao {
           font-family: 'Cambria', 'Times New Roman', Georgia, serif; font-size: 12pt; line-height: 1.55; text-align: justify; color: #111;
-          background-image: url(${timbradoNg});
-          background-size: 21cm 29.7cm;
-          background-repeat: repeat-y;
-          background-position: top center;
-          -webkit-print-color-adjust: exact; print-color-adjust: exact;
-          padding: 3.4cm 1.9cm 3.8cm !important;
+          padding: 0 !important;
+          display: flex; flex-direction: column;
         }
         .timbrado-print { display: none; }
-        .peticao-body { position: relative; }
-        .peticao p { margin: 0 0 10px; }
-        .peticao .center { text-align: center; }
-        .peticao .right { text-align: right; }
-        .peticao .b { font-weight: bold; }
-        .peticao .mono { font-variant-numeric: tabular-nums; }
-        .peticao table { border-collapse: collapse; width: 100%; margin: 8px 0 12px; }
-        .peticao th, .peticao td { border: 1px solid #555; padding: 5px 8px; font-size: 10.5pt; }
-        .peticao th { background: #eef2f7; }
+        .pet-strip { display: block; width: 100%; }
+        .pet-strip.rodape { margin-top: auto; }
+        .pet-table { width: 100%; border-collapse: collapse; }
+        .pet-table > thead td, .pet-table > tfoot td { padding: 0; border: none; }
+        .pet-cell { padding: 0.4cm 1.9cm 0.8cm; border: none; }
+        .sp-head, .sp-foot { height: 0; }
+        .peticao-body p { margin: 0 0 10px; }
+        .peticao-body .center { text-align: center; }
+        .peticao-body .right { text-align: right; }
+        .peticao-body .b { font-weight: bold; }
+        .peticao-body .mono { font-variant-numeric: tabular-nums; }
+        .peticao-body table { border-collapse: collapse; width: 100%; margin: 8px 0 12px; }
+        .peticao-body th, .peticao-body td { border: 1px solid #555; padding: 5px 8px; font-size: 10.5pt; }
+        .peticao-body th { background: #eef2f7; }
         .cj-foot {
           position: absolute;
           left: 1.7cm; right: 1.7cm; bottom: 0.9cm;
@@ -212,17 +225,21 @@ export default function Relatorio({ relatorio }) {
           /* impressão de UM documento só */
           body.print-solo .cj-report-wrap:not(.solo) { display: none !important; }
           body.print-solo .cj-report-wrap.solo { break-before: avoid; page-break-before: avoid; }
-          /* petição com TIMBRADO: imagem fixa sai em TODAS as páginas; conteúdo recuado */
+          /* petição SOLO com TIMBRADO: imagem fixa sai em TODAS as páginas; o recuo de
+             topo/rodapé por página vem do thead/tfoot (que o navegador repete por página) */
           body.print-timbrado .timbrado-print {
             display: block !important;
             position: fixed; top: 0; left: 0; width: 100%; height: 100%;
             z-index: -1;
             -webkit-print-color-adjust: exact; print-color-adjust: exact;
           }
-          body.print-timbrado .cj-sheet.peticao {
-            background: none !important;
-            padding: 3.4cm 1.9cm 3.8cm !important;
-          }
+          body.print-timbrado .pet-strip { display: none !important; }
+          body.print-timbrado .cj-sheet.peticao { display: block !important; padding: 0 !important; }
+          body.print-timbrado .sp-head { height: 3.3cm; }
+          body.print-timbrado .sp-foot { height: 3.5cm; }
+          /* impressão GERAL (todos os docs): faixas em fluxo, sem imagem fixa */
+          .cj-sheet.peticao { padding: 0 !important; }
+          .pet-table, .pet-table > tbody, .pet-table > tbody > tr { page-break-inside: auto; }
           .cj-foot { position: static; margin-top: 14px; }
           tr, table { page-break-inside: auto; }
         }
