@@ -113,6 +113,7 @@ function VerbaForm({ verba, onChange, onRemove }) {
   async function importarPlanilha(file) {
     if (!file) return
     setImpErr('')
+    if (file.size > 5 * 1024 * 1024) { setImpErr('Planilha acima de 5 MB — confira o arquivo.'); return }
     try {
       const r = await parsePlanilha(file)
       if (!r.parcelas.length) { setImpErr('Não encontrei descontos nessa planilha. Confira o arquivo.'); return }
@@ -684,7 +685,18 @@ export default function NovoCalculo() {
               <span style={{ fontSize: '14px', fontWeight: 600, color: 'hsl(var(--foreground))' }}>Clique para selecionar a planilha, PDFs ou imagens</span>
               <span style={{ fontSize: '12px', color: 'hsl(var(--muted-foreground))' }}>Planilha (.xlsx/.xls/.csv) · Petição inicial · Sentença/Acórdão</span>
               <input type="file" multiple accept=".pdf,.xlsx,.xls,.csv,image/*" style={{ display: 'none' }}
-                onChange={e => { setArquivos([...arquivos, ...Array.from(e.target.files || [])]); e.target.value = '' }} />
+                onChange={e => {
+                  const novos = Array.from(e.target.files || [])
+                  e.target.value = ''
+                  setExtraiErr('')
+                  // Limites (espelham o servidor): 5 arquivos, 10MB por PDF/imagem, 5MB por planilha
+                  for (const f of novos) {
+                    const limite = isPlanilha(f) ? 5 * 1024 * 1024 : 10 * 1024 * 1024
+                    if (f.size > limite) { setExtraiErr(`"${f.name}" tem ${(f.size / 1024 / 1024).toFixed(1)} MB — o limite é ${isPlanilha(f) ? 5 : 10} MB. Envie um arquivo menor.`); return }
+                  }
+                  if (arquivos.length + novos.length > 5) { setExtraiErr('Máximo de 5 arquivos por extração — envie só a planilha, a inicial e a decisão.'); return }
+                  setArquivos([...arquivos, ...novos])
+                }} />
             </label>
 
             {arquivos.length > 0 && (
