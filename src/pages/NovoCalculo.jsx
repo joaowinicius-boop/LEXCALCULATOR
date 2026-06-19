@@ -7,7 +7,7 @@ import {
 } from 'lucide-react'
 import { extrairDoDispositivo } from '../utils/extrair.js'
 import { extrairDocumentos, fileToBase64 } from '../lib/extrairDoc.js'
-import { parsePlanilha, isPlanilha } from '../utils/planilha.js'
+import { parsePlanilha, isPlanilha, mesclarDescontos, exportarTabelaXlsx, LEXFINDER_URL } from '../utils/planilha.js'
 import { carregarSeries } from '../lib/indices.js'
 import { calcularProcesso, fmtBRL, fmtData } from '../utils/calcularJuridico.js'
 import { useCalculos } from '../hooks/useCalculos.js'
@@ -127,6 +127,29 @@ function VerbaForm({ verba, onChange, onRemove }) {
     } catch (e) { setImpErr('Erro ao ler a planilha: ' + e.message) }
   }
 
+  const [impMsg, setImpMsg] = useState('')
+
+  // Execução: SOMAR novos descontos (tabela do LEX FINDER) aos já lançados, sem duplicar.
+  async function somarDescontos(file) {
+    if (!file) return
+    setImpErr(''); setImpMsg('')
+    if (file.size > 5 * 1024 * 1024) { setImpErr('Tabela acima de 5 MB — confira o arquivo.'); return }
+    try {
+      const r = await parsePlanilha(file)
+      if (!r.parcelas.length) { setImpErr('Não encontrei descontos nessa tabela do LEX FINDER.'); return }
+      const atuais = (verba.parcelas || []).map(p => ({ data: p.data, valor: p.valor, descricao: p.descricao }))
+      const { parcelas, adicionados } = mesclarDescontos(atuais, r.parcelas)
+      const novaSoma = Math.round(parcelas.reduce((a, p) => a + (parseFloat(String(p.valor).replace(',', '.')) || 0), 0) * 100) / 100
+      onChange({
+        ...verba,
+        parcelas: parcelas.map(p => ({ id: uid(), data: p.data, valor: p.valor })),
+        totalDeclarado: novaSoma,
+        periodoInicio: '', periodoFim: '', fonte: 'planilha',
+      })
+      setImpMsg(`${adicionados} novo(s) desconto(s) somado(s). Tabela consolidada: ${parcelas.length} lançamentos.`)
+    } catch (e) { setImpErr('Erro ao ler a tabela: ' + e.message) }
+  }
+
   // Conferência da soma (Súmula 43): soma das parcelas vs total informado na inicial — só material
   const nump = (x) => parseFloat(String(x ?? '').replace(',', '.')) || 0
   const somaParcelas = (verba.parcelas || []).reduce((a, p) => a + nump(p.valor), 0)
@@ -228,6 +251,30 @@ function VerbaForm({ verba, onChange, onRemove }) {
             <p style={{ margin: '6px 0 0', fontSize: '11px', color: 'hsl(var(--muted-foreground))' }}>
               Distribui o total no período em parcelas mensais — a soma bate exatamente com o total e cada parcela é corrigida pela sua data (padrão CJ). Mais confiável que transcrever a tabela escaneada.
             </p>
+          </div>
+
+          {/* Fase de execução: novos descontos do trâmite, via LEX FINDER (opcional) */}
+          <div style={{ marginTop: '10px', padding: '12px 14px', border: '1px solid hsl(199 89% 48% / 0.4)', borderRadius: '10px', background: 'hsl(199 89% 48% / 0.06)' }}>
+            <p style={{ margin: '0 0 4px', fontSize: '13px', fontWeight: 700, color: 'hsl(199 89% 55%)' }}>🔎 Extrair nova tabela (novos descontos da execução)</p>
+            <p style={{ margin: '0 0 8px', fontSize: '11px', color: 'hsl(var(--muted-foreground))' }}>
+              Opcional. Quando o cliente traz extratos NOVOS do período do processo: analise no LEX FINDER, exporte a tabela e importe aqui — os novos descontos <strong>somam</strong> aos já lançados (sem duplicar), gerando a tabela consolidada.
+            </p>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+              <a href={LEXFINDER_URL} target="_blank" rel="noopener noreferrer" className="btn-secondary" style={{ fontSize: '12px', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                <Sparkles size={13} /> Abrir LEX FINDER ↗
+              </a>
+              <label className="btn-secondary" style={{ fontSize: '12px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                <Upload size={13} /> Importar e somar tabela
+                <input type="file" accept=".xlsx,.xls,.csv" style={{ display: 'none' }}
+                  onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; somarDescontos(f) }} />
+              </label>
+              <button type="button" className="btn-secondary" style={{ fontSize: '12px' }}
+                disabled={!(verba.parcelas || []).length}
+                onClick={() => exportarTabelaXlsx(verba.parcelas, { emDobro: verba.emDobro, nomeArquivo: `TABELA DESCONTOS ${verba.descricao || 'CONSOLIDADA'}`.toUpperCase() })}>
+                <FileText size={13} /> Exportar nova tabela (.xlsx)
+              </button>
+            </div>
+            {impMsg && <p style={{ margin: '6px 0 0', fontSize: '11px', color: 'var(--success)' }}>✓ {impMsg}</p>}
           </div>
 
           <ParcelaEditor parcelas={verba.parcelas} onChange={(p) => upd('parcelas', p)} />

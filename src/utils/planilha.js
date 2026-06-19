@@ -163,3 +163,56 @@ export async function parsePlanilha(file) {
 
 export const EXT_PLANILHA = /\.(xlsx|xls|csv)$/i
 export const isPlanilha = (file) => EXT_PLANILHA.test(file?.name || '')
+
+// Plataforma LEX FINDER (análise de extratos) — usada na fase de execução para
+// detectar os descontos NOVOS que continuaram durante o trâmite do processo.
+export const LEXFINDER_URL = 'https://lexfinder.vercel.app'
+
+/**
+ * Mescla descontos NOVOS (ex.: vindos do LEX FINDER) numa lista existente,
+ * sem duplicar (chave data+valor). Devolve a lista consolidada e ordenada.
+ */
+export function mesclarDescontos(existentes, novos) {
+  const norm2 = (v) => Math.round((parseFloat(String(v).replace(',', '.')) || 0) * 100) / 100
+  const chave = (p) => `${p.data}|${norm2(p.valor)}`
+  const vistos = new Set((existentes || []).map(chave))
+  const out = [...(existentes || [])]
+  let add = 0
+  for (const p of (novos || [])) {
+    if (!p?.data || !(norm2(p.valor) > 0)) continue
+    const k = chave(p)
+    if (vistos.has(k)) continue
+    vistos.add(k); out.push({ data: p.data, valor: p.valor, descricao: p.descricao || '' }); add++
+  }
+  out.sort((a, b) => String(a.data).localeCompare(String(b.data)))
+  return { parcelas: out, adicionados: add }
+}
+
+/**
+ * Exporta uma "nova tabela" consolidada de descontos como .xlsx, no MESMO
+ * formato que o parser lê (Data | Descrição | Operação | Valor + VALOR TOTAL +
+ * VALOR EM DOBRO) — pronta para anexar à petição / salvar na pasta do cliente.
+ */
+export async function exportarTabelaXlsx(parcelas, { emDobro = false, nomeArquivo = 'TABELA DE DESCONTOS' } = {}) {
+  const XLSX = await import('xlsx')
+  const num = (v) => Math.round((parseFloat(String(v).replace(',', '.')) || 0) * 100) / 100
+  const fmtData = (s) => { const [y, m, d] = String(s).split('-'); return d ? `${d}/${m}/${y}` : s }
+  const linhas = (parcelas || []).filter(p => p.data && num(p.valor) > 0)
+    .sort((a, b) => String(a.data).localeCompare(String(b.data)))
+  const total = Math.round(linhas.reduce((a, p) => a + num(p.valor), 0) * 100) / 100
+  const aoa = [['Data', 'Descrição', 'Operação', 'Valor']]
+  for (const p of linhas) aoa.push([fmtData(p.data), p.descricao || '', '', num(p.valor)])
+  aoa.push([])
+  aoa.push(['VALOR TOTAL', '', '', total])
+  if (emDobro) aoa.push(['VALOR EM DOBRO', '', '', Math.round(total * 2 * 100) / 100])
+  const ws = XLSX.utils.aoa_to_sheet(aoa)
+  ws['!cols'] = [{ wch: 12 }, { wch: 28 }, { wch: 16 }, { wch: 12 }]
+  const wb = XLSX.utils.book_new()
+  XLSX.utils.book_append_sheet(wb, ws, 'Descontos')
+  const out = XLSX.write(wb, { bookType: 'xlsx', type: 'array' })
+  const url = URL.createObjectURL(new Blob([out], { type: 'application/octet-stream' }))
+  const a = document.createElement('a')
+  a.href = url; a.download = `${nomeArquivo}.xlsx`
+  document.body.appendChild(a); a.click(); document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+}
