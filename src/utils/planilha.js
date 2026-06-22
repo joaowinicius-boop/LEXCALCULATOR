@@ -166,7 +166,9 @@ export const isPlanilha = (file) => EXT_PLANILHA.test(file?.name || '')
 
 // Plataforma LEX FINDER (análise de extratos) — usada na fase de execução para
 // detectar os descontos NOVOS que continuaram durante o trâmite do processo.
-export const LEXFINDER_URL = 'https://lexfinder.vercel.app'
+// URL definida por variável de ambiente (VITE_LEXFINDER_URL) — NUNCA hardcode de
+// deploy de terceiros. Vazio = botão "Abrir LEX FINDER" oculto até configurar.
+export const LEXFINDER_URL = import.meta.env.VITE_LEXFINDER_URL || ''
 
 /**
  * Mescla descontos NOVOS (ex.: vindos do LEX FINDER) numa lista existente,

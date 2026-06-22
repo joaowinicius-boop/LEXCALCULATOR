@@ -260,9 +260,11 @@ function VerbaForm({ verba, onChange, onRemove }) {
               Opcional. Quando o cliente traz extratos NOVOS do período do processo: analise no LEX FINDER, exporte a tabela e importe aqui — os novos descontos <strong>somam</strong> aos já lançados (sem duplicar), gerando a tabela consolidada.
             </p>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              <a href={LEXFINDER_URL} target="_blank" rel="noopener noreferrer" className="btn-secondary" style={{ fontSize: '12px', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                <Sparkles size={13} /> Abrir LEX FINDER ↗
-              </a>
+              {LEXFINDER_URL && (
+                <a href={LEXFINDER_URL} target="_blank" rel="noopener noreferrer" className="btn-secondary" style={{ fontSize: '12px', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                  <Sparkles size={13} /> Abrir LEX FINDER ↗
+                </a>
+              )}
               <label className="btn-secondary" style={{ fontSize: '12px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
                 <Upload size={13} /> Importar e somar tabela
                 <input type="file" accept=".xlsx,.xls,.csv" style={{ display: 'none' }}
