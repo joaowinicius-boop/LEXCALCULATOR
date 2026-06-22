@@ -7,7 +7,8 @@ import {
 } from 'lucide-react'
 import { extrairDoDispositivo } from '../utils/extrair.js'
 import { extrairDocumentos, fileToBase64 } from '../lib/extrairDoc.js'
-import { parsePlanilha, isPlanilha, mesclarDescontos, exportarTabelaXlsx, LEXFINDER_URL } from '../utils/planilha.js'
+import { parsePlanilha, isPlanilha, mesclarDescontos, exportarTabelaXlsx } from '../utils/planilha.js'
+import AnalisarExtratoModal from '../components/AnalisarExtratoModal.jsx'
 import { carregarSeries } from '../lib/indices.js'
 import { calcularProcesso, fmtBRL, fmtData } from '../utils/calcularJuridico.js'
 import { useCalculos } from '../hooks/useCalculos.js'
@@ -128,25 +129,31 @@ function VerbaForm({ verba, onChange, onRemove }) {
   }
 
   const [impMsg, setImpMsg] = useState('')
+  const [showExtrato, setShowExtrato] = useState(false)
 
-  // Execução: SOMAR novos descontos (tabela do LEX FINDER) aos já lançados, sem duplicar.
+  // Núcleo: soma uma lista de descontos novos aos já lançados, sem duplicar.
+  function aplicarMerge(novos) {
+    const atuais = (verba.parcelas || []).map(p => ({ data: p.data, valor: p.valor, descricao: p.descricao }))
+    const { parcelas, adicionados } = mesclarDescontos(atuais, novos)
+    const novaSoma = Math.round(parcelas.reduce((a, p) => a + (parseFloat(String(p.valor).replace(',', '.')) || 0), 0) * 100) / 100
+    onChange({
+      ...verba,
+      parcelas: parcelas.map(p => ({ id: uid(), data: p.data, valor: p.valor })),
+      totalDeclarado: novaSoma,
+      periodoInicio: '', periodoFim: '', fonte: 'planilha',
+    })
+    setImpErr(''); setImpMsg(`${adicionados} novo(s) desconto(s) somado(s). Tabela consolidada: ${parcelas.length} lançamentos.`)
+  }
+
+  // Execução: SOMAR novos descontos (tabela .xlsx) aos já lançados.
   async function somarDescontos(file) {
     if (!file) return
     setImpErr(''); setImpMsg('')
     if (file.size > 5 * 1024 * 1024) { setImpErr('Tabela acima de 5 MB — confira o arquivo.'); return }
     try {
       const r = await parsePlanilha(file)
-      if (!r.parcelas.length) { setImpErr('Não encontrei descontos nessa tabela do LEX FINDER.'); return }
-      const atuais = (verba.parcelas || []).map(p => ({ data: p.data, valor: p.valor, descricao: p.descricao }))
-      const { parcelas, adicionados } = mesclarDescontos(atuais, r.parcelas)
-      const novaSoma = Math.round(parcelas.reduce((a, p) => a + (parseFloat(String(p.valor).replace(',', '.')) || 0), 0) * 100) / 100
-      onChange({
-        ...verba,
-        parcelas: parcelas.map(p => ({ id: uid(), data: p.data, valor: p.valor })),
-        totalDeclarado: novaSoma,
-        periodoInicio: '', periodoFim: '', fonte: 'planilha',
-      })
-      setImpMsg(`${adicionados} novo(s) desconto(s) somado(s). Tabela consolidada: ${parcelas.length} lançamentos.`)
+      if (!r.parcelas.length) { setImpErr('Não encontrei descontos nessa tabela.'); return }
+      aplicarMerge(r.parcelas)
     } catch (e) { setImpErr('Erro ao ler a tabela: ' + e.message) }
   }
 
@@ -257,16 +264,15 @@ function VerbaForm({ verba, onChange, onRemove }) {
           <div style={{ marginTop: '10px', padding: '12px 14px', border: '1px solid hsl(199 89% 48% / 0.4)', borderRadius: '10px', background: 'hsl(199 89% 48% / 0.06)' }}>
             <p style={{ margin: '0 0 4px', fontSize: '13px', fontWeight: 700, color: 'hsl(199 89% 55%)' }}>🔎 Extrair nova tabela (novos descontos da execução)</p>
             <p style={{ margin: '0 0 8px', fontSize: '11px', color: 'hsl(var(--muted-foreground))' }}>
-              Opcional. Quando o cliente traz extratos NOVOS do período do processo: analise no LEX FINDER, exporte a tabela e importe aqui — os novos descontos <strong>somam</strong> aos já lançados (sem duplicar), gerando a tabela consolidada.
+              Opcional. Quando o cliente traz extratos NOVOS do período do processo: <strong>analise o extrato aqui mesmo</strong> (sem sair do sistema) — os descontos detectados <strong>somam</strong> aos já lançados (sem duplicar), gerando a tabela consolidada.
             </p>
             <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              {LEXFINDER_URL && (
-                <a href={LEXFINDER_URL} target="_blank" rel="noopener noreferrer" className="btn-secondary" style={{ fontSize: '12px', textDecoration: 'none', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                  <Sparkles size={13} /> Abrir LEX FINDER ↗
-                </a>
-              )}
+              <button type="button" className="btn-primary" style={{ fontSize: '12px', background: 'hsl(199 89% 48%)' }}
+                onClick={() => setShowExtrato(true)}>
+                <Sparkles size={13} /> Analisar extrato (detectar descontos)
+              </button>
               <label className="btn-secondary" style={{ fontSize: '12px', cursor: 'pointer', display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                <Upload size={13} /> Importar e somar tabela
+                <Upload size={13} /> Importar tabela (.xlsx) e somar
                 <input type="file" accept=".xlsx,.xls,.csv" style={{ display: 'none' }}
                   onChange={e => { const f = e.target.files?.[0]; e.target.value = ''; somarDescontos(f) }} />
               </label>
@@ -278,6 +284,13 @@ function VerbaForm({ verba, onChange, onRemove }) {
             </div>
             {impMsg && <p style={{ margin: '6px 0 0', fontSize: '11px', color: 'var(--success)' }}>✓ {impMsg}</p>}
           </div>
+          {showExtrato && (
+            <AnalisarExtratoModal
+              descricaoVerba={verba.descricao || ''}
+              onUsar={aplicarMerge}
+              onClose={() => setShowExtrato(false)}
+            />
+          )}
 
           <ParcelaEditor parcelas={verba.parcelas} onChange={(p) => upd('parcelas', p)} />
 
