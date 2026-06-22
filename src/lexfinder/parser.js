@@ -127,6 +127,21 @@ const CATEGORIAS = [
     descricao: "Seguro",
   },
   {
+    id: "vida_prev",
+    label: "Vida e Previdência",
+    sublabel: "Cobranças de previdência privada e seguro de vida do banco",
+    icon: "!",
+    ...THEME,
+    keywords: ["bradesco vida e previdencia s/a", "bradesco vida e previdencia", "bradesco vida e prev", "bradesco vida prev-seg", "bradesco vida prev", "prev-seg", "vida e previdencia", "mbm previdencia complementar", "mbm previdencia", "previplan clube", "previplan", "pagto eletron cobranca (vida pre)", "previdencia complementar", "previdencia privada",
+      // BB
+      "bb previdencia", "bb prev", "brasilprev",
+      // Caixa
+      "caixa previdencia", "caixa vida"],
+    fundamento: "Art. 39, III, CDC; Súmula 473 STJ; Art. 757, CC; Tema 972 STJ",
+    acao: "Verificar se o produto de vida/previdência foi contratado voluntariamente. Cobranças sem consentimento expresso são abusivas. Pleitear cancelamento e devolução.",
+    descricao: "Vida e Previdência",
+  },
+  {
     id: "tit_cap",
     label: "Título de Capitalização",
     sublabel: "Títulos de capitalização cobrados indevidamente",
@@ -225,21 +240,6 @@ const CATEGORIAS = [
     fundamento: "Art. 52, CDC; Res. CMN 3.919/10",
     acao: "Verificar se os gastos lançados foram efetivamente realizados pelo titular. Contestar cobranças não reconhecidas e pleitear estorno com correção monetária.",
     descricao: "Gasto com Cartão de Crédito",
-  },
-  {
-    id: "vida_prev",
-    label: "Vida e Previdência",
-    sublabel: "Cobranças de Bradesco Vida e Previdência",
-    icon: "!",
-    ...THEME,
-    keywords: ["bradesco vida e previdencia s/a", "bradesco vida e previdencia", "bradesco vida e prev", "bradesco vida prev-seg", "bradesco vida prev", "prev-seg", "vida e previdencia", "mbm previdencia complementar", "mbm previdencia", "previplan clube", "previplan", "pagto eletron cobranca (vida pre)", "previdencia complementar", "previdencia privada",
-      // BB
-      "bb previdencia", "bb prev", "brasilprev",
-      // Caixa
-      "caixa previdencia", "caixa vida"],
-    fundamento: "Art. 39, III, CDC; Súmula 473 STJ; Art. 757, CC",
-    acao: "Verificar se o produto de vida/previdência foi contratado voluntariamente. Cobranças sem consentimento expresso são abusivas. Pleitear cancelamento e devolução.",
-    descricao: "Vida e Previdência",
   },
   {
     id: "extrato_movimento",
@@ -605,6 +605,92 @@ const IS_SEPARATE_TX = /\b(transfer[eê]ncia\s*pix|pix\s+(enviado|recebido|qrcod
 const IS_SAQUE_DESCRIPTOR = /\bsaque\s*(terminal|termi|correspondente|corre|pessoal|compartilhado|bradesco|dinheiro|caixa)/i;
 const IS_TARIFA_PREFIX = /^(vr\.parcial\s+)?(tarifa bancaria|tar\s)/i;
 
+// Categorias PRESENCE-ONLY (cobranças do banco, não transações do correntista).
+// Duplicado de reviewer.js para evitar dependência circular.
+const PRESENCE_ONLY_CATS_PARSER = new Set([
+  "tit_cap", "seguros", "mora_cel", "extrato_movimento",
+  "div_atraso", "reorg_finan", "op_vencidas", "reg_lancamento",
+]);
+
+// Killer-words = texto de transações REAIS do correntista (saque/transf/pix/
+// compra/cartão/depósito). Quando aparecem no histórico de uma tx
+// PRESENCE_ONLY, significa que o parser concatenou texto de row adjacente
+// (groupByY collapse ou justEmitted append).
+//
+// Bug paradigma Janeila 2026-05-14: histórico do tit_cap saiu como
+// "TITULO DE CAPITALIZACAO 1503743 SAQUE DIN CORBAN RECIBO" porque a row
+// do PDF tinha tudo agrupado por Y. Fix cirúrgico: trim do killer-word.
+const HISTORICO_KILLER_REGEX = /\b(?:saque\s*(?:din|dinheiro|corban|correspond|terminal|termi|caixa|atm|taa|pv|24h|c\/c|compartilhado|bradesco|pessoal)|saqueterminal|saqueteminal|corban\b|transferencia\b|transf\s+vr|pix\s+(?:enviado|recebido|qrcode|qr\s*code)|compra\s+(?:elo|visa|master|debito|credito)|cartao\s+\d{4,}|deposito\s+(?:dinheiro|corban|cheque)|dep\s+(?:dinheiro|corban|cheque))/i;
+
+// Post-process anti-polluição em txs PRESENCE_ONLY (cobranças de produto
+// isolado: tit_cap, seguros, mora_cel, etc).
+//
+// Quando o groupByY do PDF.js funde a linha de continuação de uma tx com a
+// próxima row do extrato, surgem dois cenários distintos:
+//
+//   CENÁRIO A (Janeila 2026-05-14, tit_cap legítimo polluído):
+//     Row real: "TITULO DE CAPITALIZACAO 1503743 100,00 2.408,44" (valor R$ 100)
+//     Row N+1 (continuação misturada): "SAQUE DIN CORBAN RECIBO ESPECIE 90,00"
+//     groupByY funde → histórico vira "TITULO DE CAPITALIZACAO 1503743 SAQUE
+//     DIN CORBAN RECIBO". Valor 100 está CORRETO (era da linha do TIT_CAP).
+//     Killer-word SAQUE veio do ruído da continuation.
+//     Fix: trimar tudo a partir do killer → histórico fica "TITULO DE
+//     CAPITALIZACAO 1503743", tx legítima preservada.
+//
+//   CENÁRIO B (vida/previdência poluída — "Frankenstein row"):
+//     Row N (continuação polluindo): "BRADESCO VIDA E PREVIDENCIA SA"
+//     Row real do extrato: "27/01/2021 SAQUE DIN CORBAN CARTAO 3743141 390,00 36,47"
+//     groupByY funde N+real → histórico vira "BRADESCO V&P SA SAQUE DIN CORBAN
+//     CARTAO 3743141". Valor 390 É DO SAQUE, não da V&P. A tx inteira é falsa.
+//     Trim do CENÁRIO A aqui MASCARA o problema: histórico vira "BRADESCO V&P SA"
+//     limpo mas o valor 390 continua errado, e burla o auto-reject downstream
+//     do reviewer (que valida `KILLER_WORDS_REGEX` no histórico).
+//
+// Distinção A vs B: olhar a CATEGORIA do KILLER. Se o killer-word é também
+// keyword de outra categoria reconhecida (saque_terminal, gastos_cartao,
+// tarifas, credito, etc), é Cenário B → tx Frankenstein → DESCARTAR (return
+// null, caller filtra). Se o killer é só ruído sem categoria própria (texto
+// solto da continuation), é Cenário A → trim normal.
+//
+// Idempotente: se o trim quebrar a categoria, retorna tx original.
+function trimHistoricoPolluido(tx) {
+  if (!tx || !tx.historico || typeof tx.historico !== 'string') return tx;
+  const cat = matchCategoria(tx.historico);
+  if (!cat || !PRESENCE_ONLY_CATS_PARSER.has(cat.id)) return tx;
+  const match = tx.historico.match(HISTORICO_KILLER_REGEX);
+  if (!match) return tx;
+  const cutIdx = match.index;
+  if (cutIdx === 0) return tx; // killer no início — não é polluição, é a tx real
+
+  // Cenário B (Frankenstein) vs A (legítimo): a distinção é a posição do
+  // docto (≥6 dígitos) relativa ao nome PRESENCE_ONLY e ao killer-word.
+  //
+  // Janeila (legítimo): "TITULO DE CAPITALIZACAO 1503743 SAQUE DIN CORBAN RECIBO"
+  //   → docto 1503743 ENTRE nome+killer (parte da row real do tit_cap).
+  //   → Killer veio de continuação merged, valor está correto. Trim normal.
+  //
+  // Exemplo (Frankenstein): "BRADESCO V&P SA SAQUE DIN CORBAN CARTAO 3743141"
+  //   → SEM docto entre nome+killer. Docto 3743141 está DEPOIS do killer
+  //     (pertence à row do saque que foi mergeada). Valor 390 também é do saque.
+  //   → Tx inteira é falsa. DESCARTAR (return null).
+  //
+  // Heurística: se NÃO houver docto entre nome PRESENCE_ONLY e killer-word,
+  // a row real do PRESENCE_ONLY nem chegou a aparecer no histórico — é só
+  // continuation que se misturou com row real de outra transação.
+  const beforeKiller = tx.historico.substring(0, cutIdx);
+  const hasDoctoBetween = /\b\d{6,}\b/.test(beforeKiller);
+  if (!hasDoctoBetween) {
+    return null; // Frankenstein — descarta tx (caller filtra nulls)
+  }
+
+  // Cenário A: trim normal do killer-word (continuation ruído).
+  const trimmed = tx.historico.substring(0, cutIdx).trim();
+  if (!trimmed) return tx;
+  const newCat = matchCategoria(trimmed);
+  if (!newCat || newCat.id !== cat.id) return tx;
+  return { ...tx, historico: trimmed };
+}
+
 function pickDebit(rowValues, cols) {
   if (!rowValues.length) return null;
   const { debitoX, creditoX, saldoX } = cols;
@@ -693,7 +779,12 @@ function extractFromRow(row, cols, skipDate) {
   const afterStart = row.items.slice(startIdx);
   const firstValIdx = afterStart.findIndex(i => IS_VALUE.test(i.text));
   const histItems = firstValIdx >= 0 ? afterStart.slice(0, firstValIdx) : afterStart;
-  const historico = histItems.map(i => i.text).join(" ").trim();
+  let historico = histItems.map(i => i.text).join(" ").trim();
+  // PDF.js às vezes funde tokens contíguos quando há pouco espaço entre eles (linhas compactas
+  // Bradesco tipo "MORA CREDITO PESSOAL 7000278 187,52 0,48"). O resultado é IS_VALUE não casar
+  // o token fundido, e os valores vazam pro histórico. Limpamos valores numéricos do FINAL
+  // (saldo, depois débito) — em casos normais o histórico nunca termina em IS_VALUE.
+  historico = historico.replace(/(?:\s+-?\d{1,3}(?:\.\d{3})*,\d{2}[DC]?){1,3}\s*$/, '').trim();
   const rowValues = row.items.filter(i => IS_VALUE.test(i.text));
   const debitVal = rowValues.length > 0 ? pickDebit(rowValues, cols) : null;
   const saldoVal = rowValues.length > 0 ? pickSaldo(rowValues, cols) : null;
@@ -843,13 +934,14 @@ function assembleTransactions(classified, layout) {
         pending.data = c.date;
         if (c.historico) pending.historico = (pending.historico + " " + c.historico).trim();
         pending.valor = c.debitVal;
+        pending.saldo = c.saldoVal ?? null;
         emit(pending);
         lastEmitted = pending;
         pending = null;
         justEmitted = true;
       } else if (c.hasValues && c.debitVal) {
         // Complete transaction on one line
-        const t = { data: c.date, historico: c.historico, valor: c.debitVal };
+        const t = { data: c.date, historico: c.historico, valor: c.debitVal, saldo: c.saldoVal ?? null };
         emit(t);
         lastEmitted = t;
         pending = null;
@@ -1007,6 +1099,7 @@ function assembleTransactions(classified, layout) {
         }
         if (pending && c.debitVal) {
           pending.valor = c.debitVal;
+          pending.saldo = c.saldoVal ?? null;
           emit(pending);
           lastEmitted = pending;
           // Allow continuation when pending has no category (next text may categorize it)
@@ -1019,6 +1112,7 @@ function assembleTransactions(classified, layout) {
           const delta = lastSaldo - c.saldoVal;
           if (delta > 0.01) {
             pending.valor = Math.round(delta * 100) / 100;
+            pending.saldo = c.saldoVal;
             emit(pending);
             lastEmitted = pending;
           }
@@ -1030,7 +1124,7 @@ function assembleTransactions(classified, layout) {
         // Standalone transaction
         if (c.debitVal) {
           const date = layout === "superior" ? lastDate : null;
-          const t = { data: date, historico: c.historico, valor: c.debitVal };
+          const t = { data: date, historico: c.historico, valor: c.debitVal, saldo: c.saldoVal ?? null };
           emit(t);
           lastEmitted = t;
           justEmitted = "standalone";
@@ -1040,7 +1134,7 @@ function assembleTransactions(classified, layout) {
           const delta = lastSaldo - c.saldoVal;
           if (delta > 0.01) {
             const date = layout === "superior" ? lastDate : null;
-            const t = { data: date, historico: c.historico, valor: Math.round(delta * 100) / 100 };
+            const t = { data: date, historico: c.historico, valor: Math.round(delta * 100) / 100, saldo: c.saldoVal };
             emit(t);
             lastEmitted = t;
             justEmitted = "standalone";
@@ -1063,7 +1157,13 @@ function assembleTransactions(classified, layout) {
   else if (pending) { emitNoValue(pending); }
   if (buffer.length > 0) flushBuffer(lastDate || "—");
 
-  return allTransactions;
+  // Post-process: limpar histórico polluído de PRESENCE_ONLY txs quando
+  // o parser concatenou texto de row adjacente (groupByY collapse ou
+  // justEmitted append). Caso paradigma Janeila 2026-05-14.
+  // trimHistoricoPolluido pode retornar null
+  // quando detecta Frankenstein (PRESENCE_ONLY + killer com outra categoria
+  // reconhecida — valor não pertence à PRESENCE_ONLY). Filtrar nulls.
+  return allTransactions.map(trimHistoricoPolluido).filter(Boolean);
 }
 
 function validateWithBalance(transactions, allRows, cols) {
@@ -1760,6 +1860,293 @@ function parseSantanderTransactions(pageData, bankProfile) {
   return { clientName: clientName || "Titular não identificado", agencia, conta, banco: bankProfile.name, periodo: periodo || "—", transactions: deduped };
 }
 
+
+async function parseDocumentoPDFFromDoc(pdf, onProgress, opts = {}) {
+  const loadOcrWorker = opts.loadTesseract || null;
+
+  // ── Fase 1: Extrair todas as páginas (com fallback OCR) ──
+  const pageData = [];
+  const ultimosPages = []; // páginas de "Últimos Lançamentos" separadas para fallback
+  const cols = { debitoX: null, creditoX: null, saldoX: null };
+  let needsOCR = false;
+  let ocrWorker = null;
+
+  // Tentar extração de texto na página 1 para decidir o path
+  const firstPage = await pdf.getPage(1);
+  const firstTc = await firstPage.getTextContent();
+  const firstItems = firstTc.items.filter(it => it.str.trim());
+  if (firstItems.length < 10) {
+    // PDF sem texto extraível — ativar OCR (apenas browser; servidor sinaliza unsupported)
+    if (loadOcrWorker) {
+      needsOCR = true;
+      ocrWorker = await loadOcrWorker();
+    } else {
+      return { clientName: "—", agencia: "", conta: "", banco: "—", periodo: "—", transactions: [], unsupported: true, requiresOcr: true };
+    }
+  } else {
+    // PDFs com CIDFont/encoding quebrado: items existem mas texto é garbage (control chars)
+    const sampleText = firstItems.slice(0, 200).map(it => it.str).join("");
+    if (!/[a-zA-ZÀ-ÿ]{2,}/.test(sampleText)) {
+      if (loadOcrWorker) {
+        try {
+          needsOCR = true;
+          ocrWorker = await loadOcrWorker();
+        } catch (e) {
+          needsOCR = false;
+          console.warn("Tesseract load failed, falling back to text extraction:", e);
+        }
+      } else {
+        return { clientName: "—", agencia: "", conta: "", banco: "—", periodo: "—", transactions: [], unsupported: true, requiresOcr: true };
+      }
+    }
+  }
+
+  // ── Detectar banco (multi-page: pages 1-3 para score-based detection) ──
+  const detectionTexts = [];
+  const firstPageText = firstItems.length > 0
+    ? firstItems.map(it => it.str || it.text || "").join(" ")
+    : (needsOCR ? "bradesco" : "");
+  detectionTexts.push(firstPageText);
+  // Pre-scan pages 2-3 for bank detection (lightweight, text-only)
+  if (!needsOCR) {
+    for (let pn = 2; pn <= Math.min(3, pdf.numPages); pn++) {
+      const pg = await pdf.getPage(pn);
+      const tc = await pg.getTextContent();
+      const pageItems = tc.items.filter(it => it.str.trim());
+      detectionTexts.push(pageItems.map(it => it.str).join(" "));
+    }
+  }
+  let bankProfile = detectBank(detectionTexts);
+  if (!bankProfile.supported) {
+    return {
+      clientName: "—",
+      agencia: "",
+      conta: "",
+      banco: bankProfile.name,
+      periodo: "—",
+      transactions: [],
+      unsupported: true,
+      bankName: bankProfile.name,
+    };
+  }
+
+  const MAX_PAGES = 500;
+  const totalPages = Math.min(pdf.numPages, MAX_PAGES);
+  for (let pageNum = 1; pageNum <= totalPages; pageNum++) {
+    onProgress && onProgress(pageNum, pdf.numPages, needsOCR);
+    const page = pageNum === 1 ? firstPage : await pdf.getPage(pageNum);
+
+    let items;
+    if (needsOCR) {
+      const ocrResult = await ocrPage(page, ocrWorker, OCR_SCALE);
+      items = ocrResult.items;
+    } else {
+      const tc = pageNum === 1 ? firstTc : await page.getTextContent();
+      items = tc.items.filter(it => it.str.trim())
+        .map(it => ({ text: it.str.trim(), x: it.transform[4], y: it.transform[5] }));
+    }
+
+    const rows = groupByY(items, needsOCR ? 3 : 4); // OCR: tight tolerance (line-level Y já normaliza same-line words)
+    const flat = items.map(i => i.text).join(" ");
+    // Detectar posições X das 3 colunas de valores no cabeçalho da tabela
+    // Re-detectar em cada página que tem cabeçalho (suporta PDFs multi-período)
+    const pageCols = { creditoX: null, debitoX: null, saldoX: null };
+    for (const item of items) {
+      if (/^cr[eé]dito/i.test(item.text)) pageCols.creditoX = item.x;
+      if (/^d[eé]bito/i.test(item.text)) pageCols.debitoX = item.x;
+      if (/^saldo/i.test(item.text)) pageCols.saldoX = item.x;
+    }
+    if (pageCols.debitoX !== null) {
+      Object.assign(cols, pageCols);
+    }
+
+    // Separar páginas de "Últimos Lançamentos" (resumo que repete última transação)
+    // Só descartar se a página é DEDICADA a "Últimos Lançamentos" (poucas transações)
+    const ultimosMarker = /[uú]ltimos\s+lan[cç]amentos/i;
+    if (ultimosMarker.test(flat)) {
+      const valueRowCount = rows.filter(r => r.items.some(i => IS_VALUE.test(i.text))).length;
+      if (valueRowCount <= 5) {
+        ultimosPages.push({ rows, flat, items });
+        continue;
+      }
+      // Página com muitas transações + "Últimos Lançamentos" no texto → processar normalmente
+    }
+    pageData.push({ rows, flat, items });
+  }
+
+  // Fallback: se TODAS as páginas são "Últimos Lançamentos", usar como fonte (não há duplicata)
+  if (pageData.length === 0 && ultimosPages.length > 0) {
+    pageData.push(...ultimosPages);
+  }
+
+  // Re-detect bank from OCR text if initial detection defaulted to Bradesco on image PDFs
+  // Minimum score threshold: OCR text often contains bank names in transaction descriptions
+  // (e.g., "PIX para ITAU UNIBANCO") which cause false positives with low scores (2-3).
+  // Only override Bradesco when strong structural markers are found (score >= 5).
+  const OCR_REDETECT_MIN_SCORE = 5;
+  if (needsOCR && bankProfile.id === "bradesco" && pageData.length > 0) {
+    const ocrText = pageData.slice(0, 3).map(p => p.flat).join(" ");
+    const redetected = detectBank(ocrText);
+    if (redetected.id !== "bradesco" && redetected._lastScore >= OCR_REDETECT_MIN_SCORE) {
+      bankProfile = redetected;
+      if (!bankProfile.supported) {
+        return { clientName: "—", agencia: "", conta: "", banco: bankProfile.name, periodo: "—", transactions: [], unsupported: true };
+      }
+    }
+  }
+  // Column clustering fallback if header detection failed
+  if (cols.debitoX === null) {
+    const allValues = pageData.flatMap(p => p.items.filter(i => IS_VALUE.test(i.text)));
+    const clustered = clusterColumns(allValues);
+    if (clustered) Object.assign(cols, clustered);
+  }
+
+  // ── Roteamento por banco ──
+  if (bankProfile.id === "itau") {
+    // Sub-format: "Extrato Anual de Tarifas" (DD/MMM dates, all-debit tariff summary)
+    if (pageData.some(p => /extrato\s+anual\s+(de\s+tarifas|com\s+as\s+tarifas)/i.test(p.flat))) {
+      return parseItauTarifasAnuais(pageData, bankProfile);
+    }
+    // Sub-format: Itaú mobile app screenshot (OCR) — "meu extrato" header, -R$ prefix values
+    if (needsOCR && pageData.some(p => /meu\s+extrato|minhas\s+finan[cç]as/i.test(p.flat))) {
+      return parseItauMobile(pageData, bankProfile);
+    }
+    return parseItauTransactions(pageData, bankProfile);
+  }
+  if (bankProfile.id === "santander") {
+    return parseSantanderTransactions(pageData, bankProfile);
+  }
+  if (bankProfile.id === "agibank") {
+    return parseAgibankTransactions(pageData, bankProfile);
+  }
+
+  // ── Fase 2 (Bradesco): Extrair cabeçalho (primeiras 3 páginas) ──
+  let clientName = "", agencia = "", conta = "", periodo = "", cpf = "";
+  for (let i = 0; i < Math.min(3, pageData.length); i++) {
+    const { flat, rows } = pageData[i];
+    if (!cpf) {
+      const m = flat.match(/cpf\s*[:\-]?\s*(\d{3}\.\d{3}\.\d{3}-?\d{2})/i)
+        || flat.match(/\b(\d{3}\.\d{3}\.\d{3}-\d{2})\b/);
+      if (m) cpf = m[1].includes("-") ? m[1] : m[1].slice(0, -2) + "-" + m[1].slice(-2);
+    }
+    if (!clientName) {
+      const m = flat.match(/nome\s*:?\s*([A-ZÁÀÂÃÉÊÍÓÔÕÚÇ][A-ZÁÀÂÃÉÊÍÓÔÕÚÇ\s]{3,60}?)(?=\s+extrato|\s+ag[eê]|\s+cpf|\s+conta|\s+cta\b|\d{3}\.)/i)
+        || flat.match(/titular\s*:?\s*([A-ZÁÀÂÃÉÊÍÓÔÕÚÇ][A-ZÁÀÂÃÉÊÍÓÔÕÚÇ\s]{3,60}?)(?=\s+extrato|\s+ag[eê]|\s+cpf|\s+conta|\d{3}\.)/i);
+      if (m) clientName = m[1].replace(/\s+/g, " ").trim();
+      if (!clientName) {
+        const m2 = flat.match(/([A-ZÁÀÂÃÉÊÍÓÔÕÚÇ][A-ZÁÀÂÃÉÊÍÓÔÕÚÇ\s]{5,60}?)\s+\d{3}\.\d{3}\.\d{3}[-.]?\d{2}/);
+        if (m2) clientName = m2[1].replace(/\s+/g, " ").trim();
+      }
+      if (!clientName) {
+        const SKIP_NAME = /extrato|conta\s*corrente|bradesco|dados|lan[cç]amento|saldo|data|hist[oó]rico|d[eé]bito|cr[eé]dito|per[ií]odo|ag[eê]ncia|cpf|documento|c[oó]digo|cliente|favorecido|banco|celular|internet|saque|recibo|transf|deposito|pagamento|pix|ted|doc\b|boleto|parcela|tarifa|cesta|opera[cç]|encargo|mora\b|seguro|capitalizacao|adiant|emissao/i;
+        for (const row of rows) {
+          const text = row.text.trim();
+          if (text.length < 8 || text.length > 60) continue;
+          if (SKIP_NAME.test(text)) continue;
+          if (/^[A-ZÁÀÂÃÉÊÍÓÔÕÚÇ]{3,}\s+[A-ZÁÀÂÃÉÊÍÓÔÕÚÇ]{2,}(\s+[A-ZÁÀÂÃÉÊÍÓÔÕÚÇ]{2,})*$/.test(text)) {
+            clientName = text;
+            break;
+          }
+        }
+      }
+    }
+    if (!agencia) {
+      const m = flat.match(/ag[eê]ncia\s*[:\-]?\s*(\d{3,6}(?:[-]\d)?)/i)
+        || flat.match(/\bag\.?\s+(\d{3,6})\b/i);
+      if (m) agencia = m[1];
+    }
+    if (!conta) {
+      const m = flat.match(/conta\s*[:\-]?\s*([\d]{4,8}[-][\d])/i)
+        || flat.match(/cta\.?\s*[:\-]?\s*([\d]{4,8}[-][\d])/i)
+        || flat.match(/c\/c\s*[:\-]?\s*([\d]{4,8}[-][\d])/i);
+      if (m) conta = m[1];
+    }
+    if (!periodo) {
+      const m = flat.match(/entre\s+([\d\/]+)\s+e\s+([\d\/]+)/i)
+        || flat.match(/per[ií]odo\s*[:\-]?\s*([\d\/]+)\s+a\s+([\d\/]+)/i);
+      if (m) periodo = `${m[1]} a ${m[2]}`;
+    }
+  }
+
+  // ── Fase 3: Detectar layout ──
+  const allRows = pageData.flatMap(p => p.rows);
+  const layout = detectLayout(allRows);
+
+  // ── Fase 4: Parsear transações (2-pass) ──
+  const classified = classifyRows(allRows, cols, needsOCR);
+  const allTransactions = assembleTransactions(classified, layout);
+
+  // Dedup: Bradesco PDFs podem repetir seções (Últimos Lançamentos, períodos sobrepostos)
+  const seen = new Set();
+  const deduped = allTransactions.filter(t => {
+    const key = `${t.data}|${t.historico}|${t.valor}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+
+  // ── Fallback OCR: texto extraído não produziu transações → tentar OCR (apenas browser) ──
+  if (deduped.length === 0 && !needsOCR && bankProfile.id === "bradesco" && loadOcrWorker) {
+    try {
+      const ocrFallbackWorker = await loadOcrWorker();
+      const ocrPageData = [];
+      const ocrCols = { creditoX: null, debitoX: null, saldoX: null };
+      for (let pageNum = 1; pageNum <= totalPages; pageNum++) {
+        onProgress && onProgress(pageNum, totalPages, true);
+        const page = pageNum === 1 ? firstPage : await pdf.getPage(pageNum);
+        const ocrResult = await ocrPage(page, ocrFallbackWorker, OCR_SCALE);
+        const rows = groupByY(ocrResult.items, 3);
+        const flat = ocrResult.items.map(i => i.text).join(" ");
+        for (const item of ocrResult.items) {
+          if (/^cr[eé]dito/i.test(item.text)) ocrCols.creditoX = item.x;
+          if (/^d[eé]bito/i.test(item.text)) ocrCols.debitoX = item.x;
+          if (/^saldo/i.test(item.text)) ocrCols.saldoX = item.x;
+        }
+        ocrPageData.push({ rows, flat, items: ocrResult.items });
+      }
+      if (ocrCols.debitoX === null) {
+        const allOcrValues = ocrPageData.flatMap(p => p.items.filter(i => IS_VALUE.test(i.text)));
+        const clustered = clusterColumns(allOcrValues);
+        if (clustered) Object.assign(ocrCols, clustered);
+      }
+      const ocrRows = ocrPageData.flatMap(p => p.rows);
+      const ocrLayout = detectLayout(ocrRows);
+      const ocrClassified = classifyRows(ocrRows, ocrCols, true);
+      const ocrTransactions = assembleTransactions(ocrClassified, ocrLayout);
+      if (ocrTransactions.length > 0) {
+        const ocrSeen = new Set();
+        const ocrDeduped = ocrTransactions.filter(t => {
+          const key = `${t.data}|${t.historico}|${t.valor}`;
+          if (ocrSeen.has(key)) return false;
+          ocrSeen.add(key);
+          return true;
+        });
+        // Re-extrair header do OCR text
+        if (!clientName || clientName === "Titular não identificado") {
+          for (let i = 0; i < Math.min(3, ocrPageData.length); i++) {
+            const ocrFlat = ocrPageData[i].flat;
+            const m = ocrFlat.match(/nome\s*:?\s*([A-ZÁÀÂÃÉÊÍÓÔÕÚÇ][A-ZÁÀÂÃÉÊÍÓÔÕÚÇ\s]{3,60}?)(?=\s+extrato|\s+ag[eê]|\s+cpf|\s+conta|\d{3}\.)/i);
+            if (m) { clientName = m[1].replace(/\s+/g, " ").trim(); break; }
+          }
+        }
+        return { clientName: clientName || "Titular não identificado", agencia, conta, banco: bankProfile.name, periodo: periodo || "—", transactions: ocrDeduped };
+      }
+    } catch (e) {
+      console.warn("OCR fallback failed:", e);
+    }
+  }
+
+  return {
+    clientName: clientName || "Titular não identificado",
+    cpf,
+    agencia,
+    conta,
+    banco: bankProfile.name,
+    periodo: periodo || "—",
+    transactions: deduped,
+  };
+}
+
 async function parseDocumentoPDF(file, onProgress) {
   const pdfjsLib = await loadPdfJs();
   const buf = await file.arrayBuffer();
@@ -2024,6 +2411,27 @@ async function parseDocumentoPDF(file, onProgress) {
     }
   }
 
+  // Monta rawLines + reviewerData pra camada de revisão (reviewer.js).
+  // rawLines: string por row (legado, mantido pra compat).
+  // reviewerData: rows estruturadas com x dos itens + cols X (débito/crédito/saldo).
+  // O reviewer usa cols pra distinguir valor-débito (que é desconto) de
+  // valor-crédito (recebimento, NÃO é desconto) e valor-saldo (não é desconto).
+  // Sem essa info, o reviewer cai em armadilhas como classificar RECEBIMENTO
+  // FORNECEDOR (crédito) como desconto.
+  const rawLines = [];
+  const reviewerRows = [];
+  for (const pd of pageData) {
+    for (const row of pd.rows) {
+      const text = row.items.map(it => it.text).join(" ").trim();
+      if (!text) continue;
+      rawLines.push(text);
+      reviewerRows.push({
+        text,
+        items: row.items.map(it => ({ text: it.text, x: it.x })),
+      });
+    }
+  }
+
   return {
     clientName: clientName || "Titular não identificado",
     agencia,
@@ -2031,7 +2439,9 @@ async function parseDocumentoPDF(file, onProgress) {
     banco: bankProfile.name,
     periodo: periodo || "—",
     transactions: deduped,
+    rawLines,
+    reviewerData: { rows: reviewerRows, cols },
   };
 }
 
-export { detectBank, BANK_PROFILES, CATEGORIAS, THEME, normalizeText, matchCategoria, analyzeAll, parseDocumentoPDF, parseValor, groupByY, pickDebit, pickSaldo, detectLayout, extractFromRow, loadPdfJs, loadTesseract, ocrCleanText, ocrPage, OCR_SCALE, IS_DATE, IS_VALUE, IS_HEADER, IS_SUMMARY, preprocessCanvas, otsuThreshold, clusterColumns, validateWithBalance };
+export { detectBank, BANK_PROFILES, CATEGORIAS, THEME, normalizeText, matchCategoria, analyzeAll, parseDocumentoPDF, parseDocumentoPDFFromDoc, parseValor, groupByY, pickDebit, pickSaldo, detectLayout, extractFromRow, loadPdfJs, loadTesseract, ocrCleanText, ocrPage, OCR_SCALE, IS_DATE, IS_VALUE, IS_HEADER, IS_SUMMARY, preprocessCanvas, otsuThreshold, clusterColumns, validateWithBalance };
