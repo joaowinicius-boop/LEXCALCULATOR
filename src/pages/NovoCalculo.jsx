@@ -3,9 +3,10 @@ import { useNavigate, useLocation } from 'react-router-dom'
 import {
   ChevronRight, ChevronLeft, Plus, Trash2, Check,
   FileText, Scale, Info, AlertCircle, Loader2, Sparkles, CheckCircle2, XCircle,
-  Upload, Bot, PencilLine, X,
+  Upload, Bot, PencilLine, X, Search,
 } from 'lucide-react'
 import { extrairDoDispositivo } from '../utils/extrair.js'
+import LerExtratosHub from '../components/LerExtratosHub.jsx'
 import { extrairDocumentos, fileToBase64 } from '../lib/extrairDoc.js'
 import { parsePlanilha, isPlanilha, mesclarDescontos, exportarTabelaXlsx } from '../utils/planilha.js'
 import AnalisarExtratoModal from '../components/AnalisarExtratoModal.jsx'
@@ -413,6 +414,26 @@ export default function NovoCalculo() {
   function removeVerba(id) { setDados(d => ({ ...d, verbas: d.verbas.filter(v => v.id !== id) })) }
   function updateVerba(id, u) { setDados(d => ({ ...d, verbas: d.verbas.map(v => v.id === id ? u : v) })) }
 
+  // HUB de extratos (Step 1) → gera uma verba por rubrica (cada lançamento = parcela)
+  function usarExtratos(grupos, meta) {
+    setDados(d => {
+      const novas = grupos.map(g => ({
+        ...VERBA_DEFAULT, id: uid(),
+        tipo: 'dano_material', indice: 'INPC',
+        emDobro: !g.naoReembolsavel,            // cobrança indevida → repetição do indébito em dobro (CDC 42)
+        descricao: g.label,
+        jurosTipo: 'fixo_1', jurosInicio: d.dataCitacao || d.dataDecisao || '',
+        parcelas: g.items.map(it => ({ id: uid(), data: it.data, valor: it.valor })),
+      }))
+      return {
+        ...d,
+        cliente: d.cliente || meta?.cliente || '',
+        verbas: [...d.verbas, ...novas],
+      }
+    })
+    setStep(3)
+  }
+
   // Extração (Step 2) → seed de verbas no novo formato
   function avancarParaStep3() {
     if (extracao?.verbas?.length > 0) {
@@ -714,6 +735,7 @@ export default function NovoCalculo() {
             {[
               { v: 'auto', icon: Bot, l: 'Automático', sub: 'IA lê os documentos' },
               { v: 'manual', icon: PencilLine, l: 'Manual', sub: 'Preencher os campos' },
+              { v: 'extrato', icon: Search, l: 'Ler extratos', sub: 'Detectar descontos nos extratos' },
             ].map(opt => {
               const Icon = opt.icon
               const active = modo === opt.v
@@ -731,6 +753,14 @@ export default function NovoCalculo() {
                 </button>
               )
             })}
+          </div>
+        )}
+
+        {/* STEP 1 — LER EXTRATOS (HUB do LEX FINDER embutido) */}
+        {step === 1 && modo === 'extrato' && (
+          <div>
+            <Section badge="🔎" eyebrow="EXECUÇÃO · NOVOS EXTRATOS" title="Ler novos extratos" desc="O cliente trouxe extratos novos do período do processo? Detecte aqui as cobranças indevidas por rubrica e gere a tabela de descontos — cada rubrica vira uma verba do cálculo." />
+            <LerExtratosHub onUsar={usarExtratos} />
           </div>
         )}
 
