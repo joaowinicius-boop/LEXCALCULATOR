@@ -1394,7 +1394,7 @@ function parseAgibankTransactions(pageData, bankProfile) {
   // Dedup
   const seen = new Set();
   const deduped = transactions.filter(t => {
-    const key = `${t.data}|${t.historico}|${t.valor}`;
+    const key = `${t.data}|${t.historico}|${t.valor}|${t.saldo == null ? '' : Number(t.saldo).toFixed(2)}`;
     if (seen.has(key)) return false;
     seen.add(key);
     return true;
@@ -1499,7 +1499,7 @@ function parseItauTarifasAnuais(pageData, bankProfile) {
   // Dedup (same PDF may have repeated sections)
   const seen = new Set();
   const deduped = transactions.filter(t => {
-    const key = `${t.data}|${t.historico}|${t.valor}`;
+    const key = `${t.data}|${t.historico}|${t.valor}|${t.saldo == null ? '' : Number(t.saldo).toFixed(2)}`;
     if (seen.has(key)) return false;
     seen.add(key);
     return true;
@@ -1641,7 +1641,7 @@ function parseItauTransactions(pageData, bankProfile) {
   // Dedup: Itaú PDFs may repeat sections across pages
   const seen = new Set();
   const deduped = transactions.filter(t => {
-    const key = `${t.data}|${t.historico}|${t.valor}`;
+    const key = `${t.data}|${t.historico}|${t.valor}|${t.saldo == null ? '' : Number(t.saldo).toFixed(2)}`;
     if (seen.has(key)) return false;
     seen.add(key);
     return true;
@@ -1844,7 +1844,7 @@ function parseSantanderTransactions(pageData, bankProfile) {
   // Dedup
   const seen = new Set();
   const deduped = transactions.filter(t => {
-    const key = `${t.data}|${t.historico}|${t.valor}`;
+    const key = `${t.data}|${t.historico}|${t.valor}|${t.saldo == null ? '' : Number(t.saldo).toFixed(2)}`;
     if (seen.has(key)) return false;
     seen.add(key);
     return true;
@@ -2079,7 +2079,7 @@ async function parseDocumentoPDFFromDoc(pdf, onProgress, opts = {}) {
   // Dedup: Bradesco PDFs podem repetir seções (Últimos Lançamentos, períodos sobrepostos)
   const seen = new Set();
   const deduped = allTransactions.filter(t => {
-    const key = `${t.data}|${t.historico}|${t.valor}`;
+    const key = `${t.data}|${t.historico}|${t.valor}|${t.saldo == null ? '' : Number(t.saldo).toFixed(2)}`;
     if (seen.has(key)) return false;
     seen.add(key);
     return true;
@@ -2116,7 +2116,7 @@ async function parseDocumentoPDFFromDoc(pdf, onProgress, opts = {}) {
       if (ocrTransactions.length > 0) {
         const ocrSeen = new Set();
         const ocrDeduped = ocrTransactions.filter(t => {
-          const key = `${t.data}|${t.historico}|${t.valor}`;
+          const key = `${t.data}|${t.historico}|${t.valor}|${t.saldo == null ? '' : Number(t.saldo).toFixed(2)}`;
           if (ocrSeen.has(key)) return false;
           ocrSeen.add(key);
           return true;
@@ -2354,7 +2354,7 @@ async function parseDocumentoPDF(file, onProgress) {
   // Dedup: Bradesco PDFs podem repetir seções (Últimos Lançamentos, períodos sobrepostos)
   const seen = new Set();
   const deduped = allTransactions.filter(t => {
-    const key = `${t.data}|${t.historico}|${t.valor}`;
+    const key = `${t.data}|${t.historico}|${t.valor}|${t.saldo == null ? '' : Number(t.saldo).toFixed(2)}`;
     if (seen.has(key)) return false;
     seen.add(key);
     return true;
@@ -2391,7 +2391,7 @@ async function parseDocumentoPDF(file, onProgress) {
       if (ocrTransactions.length > 0) {
         const ocrSeen = new Set();
         const ocrDeduped = ocrTransactions.filter(t => {
-          const key = `${t.data}|${t.historico}|${t.valor}`;
+          const key = `${t.data}|${t.historico}|${t.valor}|${t.saldo == null ? '' : Number(t.saldo).toFixed(2)}`;
           if (ocrSeen.has(key)) return false;
           ocrSeen.add(key);
           return true;
