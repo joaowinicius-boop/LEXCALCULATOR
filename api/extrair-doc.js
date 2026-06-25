@@ -37,11 +37,11 @@ REGRAS OBRIGATÓRIAS:
 
 - ÍNDICE de correção monetária: o que a DECISÃO determinar para cada verba (INPC, IPCA, SELIC). ⚠️ ATENÇÃO Lei 14.905/2024: se a decisão mandar atualizar pela "Lei 14.905/2024", pela "taxa legal" ou pelo "art. 406 do CC" (inclusive expressões como "conforme o marco temporal definido pela Lei 14.905" ou remessa à ferramenta do TJDFT/juriscalc), então o índice de correção é IPCA E jurosTipo=taxa_legal — o IPCA é o índice oficial de correção dessa lei e os juros legais são SELIC menos IPCA. Só use INPC (padrão) se a decisão NÃO especificar índice algum NEM invocar a Lei 14.905/taxa legal — NUNCA invente SELIC/IPCA por conta própria. Dano moral "exclusivamente SELIC" => indice=SELIC e jurosTipo=nenhum.
 
-- JUROS DE MORA — mapeie EXATAMENTE pelo texto, verba por verba:
-   • "juros de 1% ao mês" / "1% (um por cento)" / "juros de 1%" => fixo_1 (NÃO use taxa_legal).
-   • "taxa legal" / "art. 406 CC" / "Lei 14.905/2024" => taxa_legal.
+- JUROS DE MORA (TAXA) — mapeie verba por verba:
+   • ⚠️ CLÁUSULA GERAL: se a decisão tiver uma determinação GERAL de atualização/juros pela "Lei 14.905/2024" / "taxa legal" / "art. 406 do CC" / "marco temporal da Lei 14.905" (que vale para TODA a condenação), então jurosTipo=taxa_legal para TODAS as verbas — INCLUSIVE as que só citam "juros desde o evento danoso"/Súmula 54 ou "desde o arbitramento"/Súmula 362. Súmulas 54/362 definem só o INÍCIO dos juros, NÃO a taxa. Não rebaixe para fixo_1 só porque a verba cita a Súmula 54.
+   • Só use fixo_1 quando a decisão fixar EXPRESSAMENTE "juros de 1% ao mês" / "1% (um por cento)" para aquela verba (e SEM cláusula geral da Lei 14.905).
    • "juros pela SELIC" englobando correção => selic.  • sem juros => nenhum.
-   jurosInicio: "da citação" => data da citação (se não constar, vazio); "do evento danoso"/Súmula 54 => data do 1º desconto (mês/ano => dia 01); "do arbitramento"/"a partir desta data" => data da PRÓPRIA decisão (acórdão). NÃO invente datas.
+   jurosInicio: "da citação" => data da citação (se não constar, vazio); "do evento danoso"/Súmula 54 => data do 1º desconto (mês/ano => dia 01); "do arbitramento"/"a partir desta data"/Súmula 362 => data da PRÓPRIA decisão (acórdão). NÃO invente datas.
 
 - emDobro = true para restituição em dobro (art. 42 CDC) ou linha "VALOR EM DOBRO". NUNCA dobre você mesmo.
 - NÃO crie verba para astreintes nem multa do art. 523.
