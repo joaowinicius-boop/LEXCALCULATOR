@@ -14,6 +14,26 @@
  * A busca dos índices (BACEN) fica na camada de dados, não aqui.
  */
 
+// ─── Números pt-BR ──────────────────────────────────────────────────────────
+/**
+ * Converte valor digitado pelo usuário em número, aceitando os formatos
+ * brasileiros: "2.000,00" (milhar+decimal), "2.000" (milhar), "2000,00",
+ * "0,88", além de "39.50" e "2000". NUNCA lê "2.000" como 2 — a regra é:
+ * ponto seguido de grupos de exatamente 3 dígitos (sem vírgula) = milhar.
+ */
+export function parseValorBR(x) {
+  if (typeof x === 'number') return isFinite(x) ? x : 0
+  let s = String(x ?? '').trim().replace(/R\$\s*/i, '').replace(/\s+/g, '')
+  if (!s) return 0
+  const temVirgula = s.includes(',')
+  const temPonto = s.includes('.')
+  if (temVirgula && temPonto) s = s.replace(/\./g, '').replace(',', '.')
+  else if (temVirgula) s = s.replace(',', '.')
+  else if (temPonto && /^-?\d{1,3}(\.\d{3})+$/.test(s)) s = s.replace(/\./g, '')
+  const n = parseFloat(s)
+  return isFinite(n) ? n : 0
+}
+
 // ─── Datas ──────────────────────────────────────────────────────────────────
 function parseISO(s) {
   if (s instanceof Date) return s

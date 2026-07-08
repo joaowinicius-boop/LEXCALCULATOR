@@ -11,7 +11,7 @@ import { extrairDocumentos, fileToBase64 } from '../lib/extrairDoc.js'
 import { parsePlanilha, isPlanilha, mesclarDescontos, exportarTabelaXlsx } from '../utils/planilha.js'
 import AnalisarExtratoModal from '../components/AnalisarExtratoModal.jsx'
 import { carregarSeries } from '../lib/indices.js'
-import { calcularProcesso, fmtBRL, fmtData } from '../utils/calcularJuridico.js'
+import { calcularProcesso, fmtBRL, fmtData, parseValorBR } from '../utils/calcularJuridico.js'
 import { useCalculos } from '../hooks/useCalculos.js'
 import Relatorio from './Relatorio.jsx'
 
@@ -83,7 +83,7 @@ function ParcelaEditor({ parcelas, onChange }) {
   const add = () => onChange([...parcelas, { id: uid(), data: '', valor: '' }])
   const upd = (id, k, val) => onChange(parcelas.map(p => p.id === id ? { ...p, [k]: val } : p))
   const rm = (id) => onChange(parcelas.filter(p => p.id !== id))
-  const total = parcelas.reduce((a, p) => a + (parseFloat(String(p.valor).replace(',', '.')) || 0), 0)
+  const total = parcelas.reduce((a, p) => a + (parseValorBR(p.valor)), 0)
 
   return (
     <div style={{ marginTop: '12px' }}>
@@ -94,7 +94,7 @@ function ParcelaEditor({ parcelas, onChange }) {
       {parcelas.map((p) => (
         <div key={p.id} style={{ display: 'flex', gap: '8px', marginBottom: '6px', alignItems: 'center' }}>
           <input type="date" className="input-lex" value={p.data} onChange={e => upd(p.id, 'data', e.target.value)} style={{ flex: '0 0 170px' }} />
-          <input type="number" step="0.01" min="0" className="input-lex mono" placeholder="Valor (R$)" value={p.valor} onChange={e => upd(p.id, 'valor', e.target.value)} style={{ flex: 1 }} />
+          <input type="text" inputMode="decimal" className="input-lex mono" placeholder="Valor — ex.: 2.000,00" value={p.valor} onChange={e => upd(p.id, 'valor', e.target.value)} style={{ flex: 1 }} />
           <button className="btn-danger" onClick={() => rm(p.id)} title="Remover parcela"><Trash2 size={12} /></button>
         </div>
       ))}
@@ -136,7 +136,7 @@ function VerbaForm({ verba, onChange, onRemove }) {
   function aplicarMerge(novos) {
     const atuais = (verba.parcelas || []).map(p => ({ data: p.data, valor: p.valor, descricao: p.descricao }))
     const { parcelas, adicionados } = mesclarDescontos(atuais, novos)
-    const novaSoma = Math.round(parcelas.reduce((a, p) => a + (parseFloat(String(p.valor).replace(',', '.')) || 0), 0) * 100) / 100
+    const novaSoma = Math.round(parcelas.reduce((a, p) => a + (parseValorBR(p.valor)), 0) * 100) / 100
     onChange({
       ...verba,
       parcelas: parcelas.map(p => ({ id: uid(), data: p.data, valor: p.valor })),
@@ -159,7 +159,7 @@ function VerbaForm({ verba, onChange, onRemove }) {
   }
 
   // Conferência da soma (Súmula 43): soma das parcelas vs total informado na inicial — só material
-  const nump = (x) => parseFloat(String(x ?? '').replace(',', '.')) || 0
+  const nump = (x) => parseValorBR(x ?? '')
   const somaParcelas = (verba.parcelas || []).reduce((a, p) => a + nump(p.valor), 0)
   const totalDecl = nump(verba.totalDeclarado)
   const temConferencia = isMaterial && totalDecl > 0 && (verba.parcelas || []).length > 0
@@ -226,7 +226,7 @@ function VerbaForm({ verba, onChange, onRemove }) {
           </div>
           <div style={{ marginTop: '12px' }}>
             <Field label="Total dos descontos informado na inicial" hint="A soma da tabela / valor da restituição declarado na petição — base da geração e da conferência">
-              <input type="number" step="0.01" min="0" className="input-lex mono" placeholder="Ex.: 519,64" value={verba.totalDeclarado ?? ''} onChange={e => upd('totalDeclarado', e.target.value)} style={{ maxWidth: 240 }} />
+              <input type="text" inputMode="decimal" className="input-lex mono" placeholder="Ex.: 519,64" value={verba.totalDeclarado ?? ''} onChange={e => upd('totalDeclarado', e.target.value)} style={{ maxWidth: 240 }} />
             </Field>
           </div>
 
@@ -310,7 +310,7 @@ function VerbaForm({ verba, onChange, onRemove }) {
           <p style={{ margin: '0 0 10px', fontSize: '13px', fontWeight: 600, color: 'hsl(var(--primary))' }}>Valor fixo arbitrado na sentença</p>
           <Grid cols={2}>
             <Field label="Valor fixado (R$)" required hint="O valor da condenação fixado pelo juiz (sem parcelas)">
-              <input type="number" step="0.01" min="0" className="input-lex mono" placeholder="Ex.: 4.000,00" value={verba.valor ?? ''} onChange={e => upd('valor', e.target.value)} />
+              <input type="text" inputMode="decimal" className="input-lex mono" placeholder="Ex.: 4.000,00" value={verba.valor ?? ''} onChange={e => upd('valor', e.target.value)} />
             </Field>
             <Field label="Data do arbitramento / base" required hint="Correção a partir desta data (Súmula 362 STJ p/ dano moral)">
               <input type="date" className="input-lex" value={verba.data || ''} onChange={e => upd('data', e.target.value)} />
@@ -339,14 +339,14 @@ const isMaterialTipo = (t) => t === 'dano_material'
 //  - demais (moral/honorários/outro): UMA parcela = valor fixo na data do arbitramento
 function parcelasDaVerba(v) {
   if (isMaterialTipo(v.tipo)) return v.parcelas || []
-  const val = parseFloat(String(v.valor).replace(',', '.')) || 0
+  const val = parseValorBR(v.valor)
   return val > 0 ? [{ id: 'fixo', data: v.data || '', valor: v.valor }] : []
 }
 
 // Gera parcelas MENSAIS que somam EXATAMENTE o total, no período informado.
 // Evita depender de OCR linha-a-linha (que alucina meses) — usa total+período (confiáveis).
 function gerarParcelasMensais(total, iniISO, fimISO) {
-  const t = parseFloat(String(total).replace(',', '.')) || 0
+  const t = parseValorBR(total)
   if (!t || !iniISO || !fimISO) return []
   const [ay, am, ad] = iniISO.split('-').map(Number)
   const [by, bm] = fimISO.split('-').map(Number)
@@ -468,7 +468,7 @@ export default function NovoCalculo() {
   // confiável que SUBSTITUI a leitura da tabela escaneada no dano material.
   function aplicarExtracao(res, planilhaData = null) {
     const p = res.processo || {}
-    const num = (x) => { const n = Number(x); return isFinite(n) && n > 0 ? Math.round(n * 100) / 100 : 0 }
+    const num = (x) => { const n = parseValorBR(x); return n > 0 ? Math.round(n * 100) / 100 : 0 }
     let verbas = (res.verbas || []).map(v => {
       const isMaterial = v.tipo === 'dano_material'
       // Valor fixo (moral/honorários/outro): pega da 1ª parcela da IA (valor + data)
@@ -525,7 +525,7 @@ export default function NovoCalculo() {
 
     // Dano material da condenação fica SEMPRE (mesmo sem valores — o usuário importa a
     // planilha ou preenche); as demais verbas vazias são descartadas.
-    verbas = verbas.filter(v => v.tipo === 'dano_material' || parcelasDaVerba(v).length > 0 || (parseFloat(String(v.totalDeclarado).replace(',', '.')) || 0) > 0)
+    verbas = verbas.filter(v => v.tipo === 'dano_material' || parcelasDaVerba(v).length > 0 || (parseValorBR(v.totalDeclarado)) > 0)
     setDados(d => ({
       ...d,
       processo: p.processo || d.processo,
@@ -609,9 +609,9 @@ export default function NovoCalculo() {
         tipo: v.tipo, descricao: v.descricao, indice: v.indice,
         serie: series[v.indice], emDobro: isMaterialTipo(v.tipo) ? v.emDobro : false,
         juros: { tipo: v.jurosTipo, dataInicio: v.jurosInicio, serieSelic: series.SELIC, serieIpca: series.IPCA },
-        parcelas: parcelasDaVerba(v).map(p => ({ data: p.data, valor: parseFloat(String(p.valor).replace(',', '.')) || 0 })),
+        parcelas: parcelasDaVerba(v).map(p => ({ data: p.data, valor: parseValorBR(p.valor) })),
       }))
-      const honPct = parseFloat(String(d.honorariosPercentual).replace(',', '.')) || 0
+      const honPct = parseValorBR(d.honorariosPercentual)
       const resultado = calcularProcesso(verbasCalc, { termoFinal, honorariosPercentual: honPct })
       setProc(resultado)
 
@@ -660,7 +660,7 @@ export default function NovoCalculo() {
     setDados(d)
     const completo = verbas.length > 0 && verbas.every(v => {
       const parc = parcelasDaVerba(v)
-      return parc.length > 0 && parc.every(p => p.data && parseFloat(String(p.valor).replace(',', '.')) > 0) && (v.jurosTipo === 'nenhum' || v.jurosInicio)
+      return parc.length > 0 && parc.every(p => p.data && parseValorBR(p.valor) > 0) && (v.jurosTipo === 'nenhum' || v.jurosInicio)
     })
     setStep(3)                                       // mostra as verbas enquanto calcula
     if (completo) gerarRelatorios(d, { salvar: false })
@@ -678,7 +678,7 @@ export default function NovoCalculo() {
           ? `A verba "${nome}" está sem parcelas — informe o total + período e clique em "Gerar parcelas mensais", ou lance os descontos manualmente.`
           : `Informe o valor fixado e a data do arbitramento em "${nome}".`
       }
-      if (!parc.every(p => p.data && parseFloat(String(p.valor).replace(',', '.')) > 0)) {
+      if (!parc.every(p => p.data && parseValorBR(p.valor) > 0)) {
         return isMaterialTipo(v.tipo) ? `Preencha data e valor de todas as parcelas em "${nome}".` : `Preencha valor e data em "${nome}".`
       }
       if (v.jurosTipo !== 'nenhum' && !v.jurosInicio) return `Defina "Juros a partir de" em "${nome}".`
@@ -692,7 +692,7 @@ export default function NovoCalculo() {
     if (step === 3) return dados.verbas.length > 0 && dados.verbas.every(v => {
       const parc = parcelasDaVerba(v)
       return parc.length > 0 &&
-        parc.every(p => p.data && parseFloat(String(p.valor).replace(',', '.')) > 0) &&
+        parc.every(p => p.data && parseValorBR(p.valor) > 0) &&
         (v.jurosTipo === 'nenhum' || v.jurosInicio)
     })
     return true
@@ -885,7 +885,7 @@ export default function NovoCalculo() {
               <Field label="Data do ajuizamento" hint="Para correção desde o ajuizamento"><input type="date" className="input-lex" value={dados.dataAjuizamento} onChange={e => upd('dataAjuizamento', e.target.value)} /></Field>
               <Field label="Data da citação" hint="Termo inicial dos juros (art. 405 CC)"><input type="date" className="input-lex" value={dados.dataCitacao} onChange={e => upd('dataCitacao', e.target.value)} /></Field>
               <Field label="Termo final (data do cálculo)" required hint="Até quando atualizar"><input type="date" className="input-lex" value={dados.termoFinal} onChange={e => upd('termoFinal', e.target.value)} /></Field>
-              <Field label="Honorários de sucumbência (%)" hint="Para a petição de cumprimento (opcional)"><input type="number" step="0.01" min="0" className="input-lex mono" placeholder="Ex.: 15" value={dados.honorariosPercentual} onChange={e => upd('honorariosPercentual', e.target.value)} /></Field>
+              <Field label="Honorários de sucumbência (%)" hint="Para a petição de cumprimento (opcional)"><input type="text" inputMode="decimal" className="input-lex mono" placeholder="Ex.: 15" value={dados.honorariosPercentual} onChange={e => upd('honorariosPercentual', e.target.value)} /></Field>
             </Grid>
             <div style={{ marginTop: '16px' }}>
               <Field label="Observações"><textarea className="input-lex" rows={2} value={dados.observacoes} onChange={e => upd('observacoes', e.target.value)} style={{ resize: 'vertical', minHeight: '60px' }} /></Field>
@@ -917,7 +917,7 @@ export default function NovoCalculo() {
                       </div>
                       {extracao.verbas.map((v, i) => (
                         <div key={i} style={{ fontSize: '12px', color: 'hsl(var(--muted-foreground))', padding: '4px 0' }}>
-                          • {TIPO_VERBA[v.tipo]} — {v.indice} — <span className="mono">{fmtBRL(parseFloat(v.valorOriginal))}</span>{v._emDobroNaSentenca ? ' (em dobro)' : ''}
+                          • {TIPO_VERBA[v.tipo]} — {v.indice} — <span className="mono">{fmtBRL(parseValorBR(v.valorOriginal))}</span>{v._emDobroNaSentenca ? ' (em dobro)' : ''}
                         </div>
                       ))}
                       {extracao.avisos?.map((a, i) => (
@@ -947,6 +947,17 @@ export default function NovoCalculo() {
               <VerbaForm key={v.id} verba={v} onChange={u => updateVerba(v.id, u)} onRemove={() => removeVerba(v.id)} />
             ))}
             <button className="btn-secondary" onClick={addVerba} style={{ width: '100%', justifyContent: 'center', padding: '10px' }}><Plus size={15} /> Adicionar Verba</button>
+
+            {/* Honorários de sucumbência — também aqui (é onde o usuário procura). */}
+            <div style={{ marginTop: 14, padding: '12px 14px', background: 'hsl(var(--secondary))', border: '1px solid hsl(var(--border))', borderRadius: 10, display: 'flex', alignItems: 'center', gap: 14, flexWrap: 'wrap' }}>
+              <div style={{ flex: 1, minWidth: 220 }}>
+                <p style={{ margin: 0, fontSize: 13, fontWeight: 700 }}>Honorários de sucumbência (%)</p>
+                <p style={{ margin: '2px 0 0', fontSize: 11.5, color: 'hsl(var(--muted-foreground))' }}>% sobre o total atualizado das verbas, conforme a decisão (ex.: 10, 15 ou 20). Deixe vazio se não houver.</p>
+              </div>
+              <input type="text" inputMode="decimal" className="input-lex mono" placeholder="Ex.: 20"
+                value={dados.honorariosPercentual} onChange={e => upd('honorariosPercentual', e.target.value)}
+                style={{ width: 110, textAlign: 'center' }} />
+            </div>
           </div>
         )}
 

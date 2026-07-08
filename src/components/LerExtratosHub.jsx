@@ -5,7 +5,7 @@ import {
 } from 'lucide-react'
 import { analisarExtratos } from '../utils/extrato.js'
 import { exportarTabelaXlsx } from '../utils/planilha.js'
-import { fmtBRL } from '../utils/calcularJuridico.js'
+import { fmtBRL, parseValorBR } from '../utils/calcularJuridico.js'
 
 /**
  * HUB de leitura de extratos (motor LEX FINDER embutido) no Passo 1.
@@ -78,7 +78,7 @@ export default function LerExtratosHub({ onUsar }) {
   }
   function addManual(catId) {
     const f = addForm[catId] || {}
-    const valor = parseFloat(String(f.valor).replace(',', '.'))
+    const valor = parseValorBR(f.valor)
     if (!f.data || !(valor > 0)) return
     setManualAdds(prev => ({ ...prev, [catId]: [...(prev[catId] || []), { data: f.data, valor: Math.round(valor * 100) / 100, historico: (f.historico || '').trim() || 'Lançamento manual' }] }))
     setAddForm(prev => ({ ...prev, [catId]: { data: '', valor: '', historico: '' } }))
