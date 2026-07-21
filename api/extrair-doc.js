@@ -83,7 +83,7 @@ export default async function handler(req, res) {
   }
 
   const apiKey = process.env.OPENAI_API_KEY
-  if (!apiKey) return res.status(500).json({ ok: false, error: "Secret OPENAI_API_KEY não configurado no servidor." })
+  if (!apiKey) return res.status(503).json({ ok: false, error: "Chave OpenAI não cadastrada — abrir ticket para o time tech." })
 
   try {
     const body = typeof req.body === "object" && req.body ? req.body : JSON.parse(req.body || "{}")
