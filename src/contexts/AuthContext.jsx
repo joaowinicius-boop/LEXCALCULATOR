@@ -9,8 +9,8 @@ export function AuthProvider({ children }) {
   const [loading, setLoading] = useState(true)
 
   async function loadProfile(authUser) {
-    // Backend compartilhado (RA TECHNOLOGY): NÃO consultamos a tabela `profiles`
-    // (de outro app). O perfil do usuário vem do user_metadata do próprio Auth.
+    // NÃO consultamos a tabela `profiles` (vazia);
+    // o perfil do usuário vem do user_metadata do próprio Auth.
     if (!authUser) { setProfile(null); return }
     const m = authUser.user_metadata || {}
     setProfile(m.name || m.oab || m.role ? { name: m.name, oab: m.oab, role: m.role } : null)
