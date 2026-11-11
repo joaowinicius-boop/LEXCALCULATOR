@@ -137,8 +137,11 @@ export default function Login() {
     try {
       await login(email, senha)
       navigate('/')
-    } catch {
-      setErro('E-mail ou senha inválidos. Verifique suas credenciais.')
+    } catch (err) {
+      // Só credencial errada vira "senha inválida"; servidor fora/pausado não pode enganar o usuário.
+      if (err?.code === 'invalid_credentials') setErro('E-mail ou senha inválidos. Verifique suas credenciais.')
+      else if (err?.code === 'email_not_confirmed') setErro('E-mail ainda não confirmado. Verifique sua caixa de entrada.')
+      else setErro('Não foi possível conectar ao servidor. Tente de novo em instantes ou avise o suporte.')
     } finally {
       setLoading(false)
     }
