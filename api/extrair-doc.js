@@ -1,9 +1,13 @@
-// LEX CALCULATOR — extração por IA (OpenAI gpt-4o, leitura nativa de PDF).
-// Função serverless da Vercel (same-origin). A chave fica em process.env.OPENAI_API_KEY
+// LEX CALCULATOR — extração por IA (Google Gemini, leitura nativa de PDF).
+// Função serverless da Vercel (same-origin). A chave fica em process.env.GEMINI_API_KEY
 // (só no ambiente do servidor — nunca no código). Exige usuário autenticado
 // (JWT do Supabase no header Authorization) e limita tamanho/quantidade de docs.
 
 export const config = { maxDuration: 60 }
+
+// flash-lite: estável e rápido (~5 s) nos testes de 16/11/2026; os flash maiores davam 503
+// ou ~50 s. GEMINI_MODEL na Vercel troca o principal sem mexer no código.
+const MODELOS = [process.env.GEMINI_MODEL || "gemini-3.1-flash-lite", "gemini-3.8-flash"]
 
 // Decodifica o payload do JWT do Supabase (sem verificar assinatura — só checa
 // role/exp, paridade com o gate anterior) para garantir que há um usuário logado.
@@ -82,8 +86,8 @@ export default async function handler(req, res) {
     return res.status(401).json({ ok: false, error: "Faça login para usar a extração por IA." })
   }
 
-  const apiKey = process.env.OPENAI_API_KEY
-  if (!apiKey) return res.status(503).json({ ok: false, error: "Chave OpenAI não cadastrada — abrir ticket para o time tech." })
+  const apiKey = process.env.GEMINI_API_KEY
+  if (!apiKey) return res.status(503).json({ ok: false, error: "Chave do Gemini não cadastrada — abrir ticket para o time tech." })
 
   try {
     const body = typeof req.body === "object" && req.body ? req.body : JSON.parse(req.body || "{}")
@@ -99,39 +103,42 @@ export default async function handler(req, res) {
     for (const d of documentos) {
       if (!d?.base64) continue
       const mt = d.mediaType || "application/pdf"
-      if (mt === "application/pdf") parts.push({ type: "file", file: { filename: d.nome || "documento.pdf", file_data: `data:application/pdf;base64,${d.base64}` } })
-      else if (mt.startsWith("image/")) parts.push({ type: "image_url", image_url: { url: `data:${mt};base64,${d.base64}` } })
+      if (mt === "application/pdf" || mt.startsWith("image/")) parts.push({ inline_data: { mime_type: mt, data: d.base64 } })
     }
-    if (texto.trim()) parts.push({ type: "text", text: "Texto auxiliar:\n\n" + texto })
+    if (texto.trim()) parts.push({ text: "Texto auxiliar:\n\n" + texto })
     if (!parts.length) return res.status(400).json({ ok: false, error: "Nada para extrair. Envie um PDF ou imagem." })
-    parts.push({ type: "text", text: "Extraia e chame registrar_calculo. Lembretes: dispositivo prevalece sobre a fundamentação; vara = juízo de ORIGEM da inicial (nunca Turma Recursal); honorários em % => processo.honorariosPercentual (sem verba); índice omisso => INPC, MAS Lei 14.905/2024 ou 'taxa legal' => indice=IPCA + jurosTipo=taxa_legal; '1% ao mês' => fixo_1; 'a partir desta data' => data do acórdão." })
+    parts.push({ text: "Extraia e chame registrar_calculo. Lembretes: dispositivo prevalece sobre a fundamentação; vara = juízo de ORIGEM da inicial (nunca Turma Recursal); honorários em % => processo.honorariosPercentual (sem verba); índice omisso => INPC, MAS Lei 14.905/2024 ou 'taxa legal' => indice=IPCA + jurosTipo=taxa_legal; '1% ao mês' => fixo_1; 'a partir desta data' => data do acórdão." })
 
     const ctrl = new AbortController()
     const timer = setTimeout(() => ctrl.abort(), 55000)
-    let r
+    const corpo = JSON.stringify({
+      systemInstruction: { parts: [{ text: SYSTEM }] },
+      contents: [{ role: "user", parts }],
+      tools: [{ functionDeclarations: [{ name: "registrar_calculo", description: "Registra processo e verbas.", parameters: SCHEMA }] }],
+      toolConfig: { functionCallingConfig: { mode: "ANY", allowedFunctionNames: ["registrar_calculo"] } },
+      generationConfig: { temperature: 0, maxOutputTokens: 8000 },
+    })
+    let r, data
     try {
-      r = await fetch("https://api.openai.com/v1/chat/completions", {
-        method: "POST", signal: ctrl.signal,
-        headers: { "Authorization": `Bearer ${apiKey}`, "content-type": "application/json" },
-        body: JSON.stringify({
-          model: "gpt-4o", max_tokens: 8000,
-          messages: [{ role: "system", content: SYSTEM }, { role: "user", content: parts }],
-          tools: [{ type: "function", function: { name: "registrar_calculo", description: "Registra processo e verbas.", parameters: SCHEMA } }],
-          tool_choice: { type: "function", function: { name: "registrar_calculo" } },
-        }),
-      })
+      // Modelo congestionado (503) ou cota estourada (429): tenta o próximo da lista.
+      for (const modelo of MODELOS) {
+        r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelo}:generateContent`, {
+          method: "POST", signal: ctrl.signal,
+          headers: { "x-goog-api-key": apiKey, "content-type": "application/json" },
+          body: corpo,
+        })
+        data = await r.json()
+        if (r.status !== 503 && r.status !== 429) break
+      }
     } catch (e) {
       if (e?.name === "AbortError") return res.status(504).json({ ok: false, error: "A leitura demorou demais. Envie só a inicial e a sentença, ou um PDF menor." })
       throw e
     } finally { clearTimeout(timer) }
 
-    const data = await r.json()
-    if (!r.ok) return res.status(502).json({ ok: false, error: `OpenAI ${r.status}: ${data?.error?.message || "erro"}` })
-    const tc = data?.choices?.[0]?.message?.tool_calls?.[0]
-    if (!tc?.function?.arguments) return res.status(502).json({ ok: false, error: "IA não retornou os dados estruturados." })
-    let out = {}
-    try { out = JSON.parse(tc.function.arguments) } catch { return res.status(502).json({ ok: false, error: "Falha ao ler o JSON da IA." }) }
-    return res.status(200).json({ ok: true, processo: out.processo || null, verbas: out.verbas || [], usage: data.usage })
+    if (!r.ok) return res.status(502).json({ ok: false, error: `Gemini ${r.status}: ${data?.error?.message || "erro"}` })
+    const out = (data?.candidates?.[0]?.content?.parts || []).find(p => p.functionCall)?.functionCall?.args
+    if (!out) return res.status(502).json({ ok: false, error: "IA não retornou os dados estruturados." })
+    return res.status(200).json({ ok: true, processo: out.processo || null, verbas: out.verbas || [], usage: data.usageMetadata })
   } catch (e) {
     return res.status(500).json({ ok: false, error: String(e?.message || e) })
   }

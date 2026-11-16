@@ -12,7 +12,7 @@ export function fileToBase64(file) {
 
 /**
  * Envia documentos (PDF/imagem) e/ou texto para a função serverless `/api/extrair-doc`
- * (mesma origem, na Vercel do calculator — chave OpenAI só no servidor), que usa a IA
+ * (mesma origem, na Vercel do calculator — chave do Gemini só no servidor), que usa a IA
  * para devolver { processo, verbas } no contrato do sistema. Requer usuário logado:
  * mandamos o JWT da sessão Supabase no header Authorization para o gate de acesso.
  */
