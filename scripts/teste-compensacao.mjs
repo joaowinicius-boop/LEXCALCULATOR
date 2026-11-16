@@ -31,4 +31,17 @@ quase(muito.totalGeral, muito.resultados[1].resultado.subtotal)
 const soMoral = calcularProcesso([moral], { termoFinal, creditos: [{ data: '2024-01-01', valor: 500 }] })
 quase(soMoral.compensacao.compensado, 0)
 
-console.log('compensação ok')
+// 5) Art. 523: base = débitos − créditos (sem honorários de sucumbência), fora do totalGeral.
+const m523 = calcularProcesso([material, moral], { termoFinal, honorariosPercentual: 10, creditos: [{ data: '2024-01-01', valor: 500 }], art523: { multa: true, honorarios: true } })
+const base = m523.principal + m523.juros - m523.compensacao.compensado
+quase(m523.art523.valorMulta, base * 0.1)
+quase(m523.art523.valorHonorarios, base * 0.1)
+quase(m523.totalGeral, com.totalGeral)
+quase(m523.art523.totalComMulta, com.totalGeral + base * 0.2)
+// JEC: só a multa.
+const jec = calcularProcesso([material, moral], { termoFinal, art523: { multa: true } })
+quase(jec.art523.valorHonorarios, 0)
+quase(jec.art523.totalComMulta, jec.totalGeral * 1.1)
+quase(sem.art523.totalComMulta, sem.totalGeral)
+
+console.log('compensação e art. 523 ok')

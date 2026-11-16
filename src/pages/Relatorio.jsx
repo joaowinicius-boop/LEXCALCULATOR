@@ -136,6 +136,7 @@ export default function Relatorio({ relatorio }) {
               verba={item.verba}
               resultado={item.resultado}
               compensacao={item === materialComp ? proc.compensacao : null}
+              art523={proc.art523}
             />
           </div>
         </Fragment>

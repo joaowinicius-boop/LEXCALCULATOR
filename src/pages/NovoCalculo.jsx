@@ -340,6 +340,28 @@ const isMaterialTipo = (t) => t === 'dano_material'
 // Compensação (o "Crédito" do Cálculo Jurídico): o que o cliente recebeu do banco
 // (saque/TED do empréstimo). Corrigido e com juros pelos critérios do dano material,
 // abatido SÓ do dano material no total.
+// Multa e honorários do art. 523, §1º, CPC (10% cada, se não pagar no prazo). JEC: só a multa.
+// Aparece no relatório e na petição, mas NÃO entra no total salvo (dashboard).
+function Art523Form({ valor, onChange }) {
+  const box = (k, label) => (
+    <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, cursor: 'pointer' }}>
+      <input type="checkbox" checked={!!valor[k]} onChange={e => onChange({ ...valor, [k]: e.target.checked })} /> {label}
+    </label>
+  )
+  return (
+    <div style={{ marginTop: 14, padding: '12px 14px', background: 'hsl(var(--secondary))', border: '1px solid hsl(var(--border))', borderRadius: 10 }}>
+      <p style={{ margin: 0, fontSize: 13, fontWeight: 700 }}>Multa do art. 523, §1º, CPC (opcional)</p>
+      <p style={{ margin: '2px 0 10px', fontSize: 11.5, color: 'hsl(var(--muted-foreground))' }}>
+        Para o pedido de penhora, quando não houve pagamento no prazo. <b>JEC: marque só a multa.</b> Sai no relatório e na petição, mas não entra no total salvo no histórico.
+      </p>
+      <div style={{ display: 'flex', gap: 20, flexWrap: 'wrap' }}>
+        {box('multa', 'Multa de 10%')}
+        {box('honorarios', 'Honorários de 10%')}
+      </div>
+    </div>
+  )
+}
+
 function CompensacaoForm({ creditos, onChange, temMaterial }) {
   const upd = (id, k, v) => onChange(creditos.map(c => c.id === id ? { ...c, [k]: v } : c))
   return (
@@ -427,7 +449,7 @@ export default function NovoCalculo() {
     processo: '', cliente: '', executada: '', vara: '',
     tipoDocumento: 'sentenca',
     dataDecisao: '', dataTransito: '', dataCitacao: '', dataAjuizamento: '',
-    termoFinal: hoje, honorariosPercentual: '', observacoes: '', verbas: [], creditos: [],
+    termoFinal: hoje, honorariosPercentual: '', observacoes: '', verbas: [], creditos: [], art523: { multa: false, honorarios: false },
   })
   const upd = (k, v) => setDados(d => ({ ...d, [k]: v }))
 
@@ -642,14 +664,14 @@ export default function NovoCalculo() {
       }))
       const honPct = parseValorBR(d.honorariosPercentual)
       const creditos = (d.creditos || []).map(c => ({ data: c.data, valor: parseValorBR(c.valor), descricao: c.descricao }))
-      const resultado = calcularProcesso(verbasCalc, { termoFinal, honorariosPercentual: honPct, creditos })
+      const resultado = calcularProcesso(verbasCalc, { termoFinal, honorariosPercentual: honPct, creditos, art523: d.art523 })
       setProc(resultado)
 
       const agora = new Date()
       setGeradoEm(`${agora.toLocaleDateString('pt-BR')}, às ${agora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`)
 
       if (salvar) {
-        try { await salvarCalculo(d, d.verbas, resultado.totalGeral, { termoFinal, honorariosPercentual: honPct, creditos: d.creditos || [] }) } catch (e) { console.warn('Falha ao salvar:', e) }
+        try { await salvarCalculo(d, d.verbas, resultado.totalGeral, { termoFinal, honorariosPercentual: honPct, creditos: d.creditos || [], art523: d.art523 }) } catch (e) { console.warn('Falha ao salvar:', e) }
       }
       setStep(4)
     } catch (e) {
@@ -687,6 +709,7 @@ export default function NovoCalculo() {
       honorariosPercentual: dc.honorariosPercentual ?? '',
       observacoes: c.observacoes || '', verbas,
       creditos: (dc.creditos || []).map(cr => ({ ...cr, id: uid() })),
+      art523: dc.art523 || { multa: false, honorarios: false },
     }
     setDados(d)
     const completo = verbas.length > 0 && verbas.every(v => {
@@ -731,7 +754,7 @@ export default function NovoCalculo() {
 
   function reset() {
     setProc(null); setExtracao(null); setDispositivo('')
-    setDados({ processo: '', cliente: '', executada: '', vara: '', tipoDocumento: 'sentenca', dataDecisao: '', dataTransito: '', dataCitacao: '', dataAjuizamento: '', termoFinal: hoje, observacoes: '', verbas: [], creditos: [] })
+    setDados({ processo: '', cliente: '', executada: '', vara: '', tipoDocumento: 'sentenca', dataDecisao: '', dataTransito: '', dataCitacao: '', dataAjuizamento: '', termoFinal: hoje, observacoes: '', verbas: [], creditos: [], art523: { multa: false, honorarios: false } })
     setStep(1)
   }
 
@@ -989,6 +1012,8 @@ export default function NovoCalculo() {
                 value={dados.honorariosPercentual} onChange={e => upd('honorariosPercentual', e.target.value)}
                 style={{ width: 110, textAlign: 'center' }} />
             </div>
+
+            <Art523Form valor={dados.art523 || {}} onChange={a => upd('art523', a)} />
 
             <CompensacaoForm creditos={dados.creditos || []} onChange={cs => upd('creditos', cs)}
               temMaterial={dados.verbas.some(v => isMaterialTipo(v.tipo))} />

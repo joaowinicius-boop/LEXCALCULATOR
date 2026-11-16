@@ -223,6 +223,17 @@ export function calcularProcesso(verbas, opts = {}) {
   const honorarios = subtotalSemHonorarios * (honorariosPct / 100)
 
   const compensacao = calcularCompensacao(opts.creditos, resultados, termoFinal)
+  const totalGeral = subtotalSemHonorarios + honorarios - compensacao.compensado
+
+  // Art. 523, §1º, CPC: 10% de multa e/ou 10% de honorários se não pagar no prazo
+  // voluntário (JEC: só a multa). Base = débitos − créditos, sem os honorários de
+  // sucumbência (padrão do CJ). Fica FORA do totalGeral (que vai para o dashboard).
+  const a523 = opts.art523 || {}
+  const base523 = subtotalSemHonorarios - compensacao.compensado
+  const multa523 = a523.multa ? base523 * 0.1 : 0
+  const honorarios523 = a523.honorarios ? base523 * 0.1 : 0
+  const art523 = { multa: !!a523.multa, honorarios: !!a523.honorarios, base: base523,
+    valorMulta: multa523, valorHonorarios: honorarios523, totalComMulta: totalGeral + multa523 + honorarios523 }
 
   return {
     termoFinal,
@@ -232,7 +243,8 @@ export function calcularProcesso(verbas, opts = {}) {
     honorarios,
     honorariosPercentual: honorariosPct,
     compensacao,
-    totalGeral: subtotalSemHonorarios + honorarios - compensacao.compensado,
+    art523,
+    totalGeral,
   }
 }
 

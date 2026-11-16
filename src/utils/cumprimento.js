@@ -3,6 +3,7 @@
  * consolidando os valores já calculados (proc) em HTML pronto para Word/impressão.
  */
 import { fmtBRL, fmtData } from './calcularJuridico.js'
+import { DECLARACAO_TJDFT } from '../data/textosRelatorio.js'
 
 const ESCRITORIO = {
   advogado: 'NICOLAS SANTOS CARVALHO GOMES',
@@ -53,6 +54,12 @@ export function valorExtenso(valor) {
   return txt
 }
 
+// Frase do art. 523 (multa e/ou honorários de 10%), usada no HTML e no .docx.
+export function fraseArt523(a) {
+  const itens = [a.valorMulta && `multa de 10% (${fmtBRL(a.valorMulta)})`, a.valorHonorarios && `honorários advocatícios de 10% (${fmtBRL(a.valorHonorarios)})`].filter(Boolean)
+  return `Não havendo pagamento voluntário no prazo, acrescem-se ${itens.join(' e ')}, nos termos do art. 523, §1º, do CPC, incidentes sobre os débitos atualizados, totalizando ${fmtBRL(a.totalComMulta)} (${valorExtenso(a.totalComMulta)}).`
+}
+
 // ─── Petição ────────────────────────────────────────────────────────────────────
 export function gerarCumprimentoHtml(meta = {}, proc, opts = {}) {
   const esc_ = ESCRITORIO
@@ -87,6 +94,8 @@ export function gerarCumprimentoHtml(meta = {}, proc, opts = {}) {
   const descHon = honorarios > 0
     ? `Os honorários advocatícios sucumbenciais foram arbitrados em ${(proc.honorariosPercentual || 0).toLocaleString('pt-BR')}% sobre o valor da condenação, ora atualizados.`
     : 'Os honorários advocatícios sucumbenciais não foram arbitrados.'
+  const a523 = proc.art523 || {}
+  const desc523 = (a523.valorMulta || a523.valorHonorarios) ? fraseArt523(a523) : ''
   const descComp = compensado > 0
     ? `Do dano material abate-se a compensação de ${fmtBRL(compensado)}, referente aos valores recebidos pela parte Exequente, atualizados pelos mesmos critérios do dano material.`
     : ''
@@ -112,6 +121,8 @@ export function gerarCumprimentoHtml(meta = {}, proc, opts = {}) {
     </tbody>
   </table>
   <p style="text-indent:2cm">Total da execução: <b>${fmtBRL(total)}</b> (${valorExtenso(total)}).</p>
+  ${desc523 ? `<p style="text-indent:2cm">${desc523}</p>` : ''}
+  <p style="text-indent:2cm">${DECLARACAO_TJDFT.replace('acima', 'anexos')}</p>
 
   <p style="text-indent:2cm">Ante o exposto, requer-se a intimação da parte Executada para, no prazo de 15 (quinze) dias úteis, efetuar e <b>COMPROVAR o pagamento voluntário</b> da quantia de <b>${fmtBRL(total)}</b> (${valorExtenso(total)}), sob pena de incidência da multa de 10% e dos honorários advocatícios de 10%, nos termos do art. 523, §1º, do CPC, além de penhora de bens.</p>
 

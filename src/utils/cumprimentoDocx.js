@@ -11,7 +11,8 @@
  *  3. devolvemos o arquivo — Word abre como se tivesse sido feito no modelo.
  */
 import { fmtBRL } from './calcularJuridico.js'
-import { valorExtenso } from './cumprimento.js'
+import { valorExtenso, fraseArt523 } from './cumprimento.js'
+import { DECLARACAO_TJDFT } from '../data/textosRelatorio.js'
 // Modelo do escritório EMBUTIDO no bundle (data URI) — o download nunca depende de
 // arquivo no servidor (sem SPA-fallback, sem corrida com deploy, sem cache velho).
 import modeloInline from '../assets/modelo_cumprimento.docx?inline'
@@ -78,7 +79,8 @@ export function variaveisCumprimento(meta = {}, proc) {
       CLIENTE: (meta.cliente || '____________').toUpperCase(),
       FRASE_MORAL: fraseMoral,
       FRASE_MATERIAL: fraseMaterial + fraseCompensacao,
-      FRASE_HONORARIOS: fraseHonorarios,
+      // o modelo tem parágrafos fixos: 523 e declaração do TJDFT vão junto da frase dos honorários
+      FRASE_HONORARIOS: [fraseHonorarios, (proc.art523?.valorMulta || proc.art523?.valorHonorarios) ? fraseArt523(proc.art523) : '', DECLARACAO_TJDFT.replace('acima', 'abaixo')].filter(Boolean).join(' '),
       MORAL_ORIG: fmtBRL(moralOrig),
       MORAL_ATU: fmtBRL(moralAtu),
       MATERIAL_ORIG: fmtBRL(materialOrig),

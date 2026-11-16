@@ -26,16 +26,21 @@ export const OPCOES_MULTA = [
   ['Aplicar a multa nos créditos?', 'Não'],
 ]
 
-// Multa do Art. 523 do CPC (padrão)
+// Multa do Art. 523 do CPC — linhas fixas (as duas primeiras vêm do cálculo)
 export const OPCOES_ART523 = [
-  ['Aplicar multa moratória de 10%', 'Não'],
-  ['Aplicar multa de honorários advocatícios de 10%', 'Não'],
-  ['Incluir juros de mora no cálculo da multa do Art. 523', 'Não'],
+  ['Base de cálculo da multa do Art. 523', 'Débitos − créditos'],
+  ['Incluir juros de mora no cálculo da multa do Art. 523', 'Sim'],
   ['Incluir custas no cálculo da multa do Art. 523', 'Não'],
   ['Incluir honorários sucumbenciais na base da multa do Art. 523', 'Não'],
   ['Incluir Multa no cálculo da multa do Art. 523', 'Não'],
   ['Incluir juros compensatórios no cálculo da multa do Art. 523', 'Não'],
 ]
+
+// Declaração de parâmetros (pedido da execução, reunião de 11/11/2026)
+export const DECLARACAO_TJDFT =
+  'Declara-se que os cálculos acima foram elaborados com os mesmos parâmetros de correção monetária e juros de mora ' +
+  'adotados pela calculadora do Tribunal de Justiça do Distrito Federal e dos Territórios (TJDFT), com índices oficiais ' +
+  'do IBGE e do Banco Central.'
 
 // Seção "Detalhes do Cálculo" — textos explicativos (fiel ao CJ)
 export const DETALHES_CALCULO = [

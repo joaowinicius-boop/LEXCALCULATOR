@@ -2,7 +2,7 @@ import { Fragment } from 'react'
 import { Scale } from 'lucide-react'
 import { fmtBRL, fmtFator, fmtPct, fmtData, INDICE_NOME } from '../utils/calcularJuridico.js'
 import {
-  LABEL_JUROS, OPCOES_CORRECAO, OPCOES_MULTA, OPCOES_ART523, DETALHES_CALCULO,
+  LABEL_JUROS, OPCOES_CORRECAO, OPCOES_MULTA, OPCOES_ART523, DETALHES_CALCULO, DECLARACAO_TJDFT,
 } from '../data/textosRelatorio.js'
 
 const TIPO_UP = {
@@ -42,7 +42,7 @@ function KV({ rows }) {
   )
 }
 
-export default function RelatorioCJ({ meta = {}, geradoEm, termoFinal, verba, resultado, compensacao }) {
+export default function RelatorioCJ({ meta = {}, geradoEm, termoFinal, verba, resultado, compensacao, art523 }) {
   const indiceNome = INDICE_NOME[verba.indice] || verba.indice
   const jurosLabel = LABEL_JUROS[verba.juros?.tipo] || 'Não aplicado'
   const jurosInicio = verba.juros?.dataInicio
@@ -53,6 +53,9 @@ export default function RelatorioCJ({ meta = {}, geradoEm, termoFinal, verba, re
   const cred = compensacao?.linhas?.length ? compensacao : null
   const compensado = cred?.compensado || 0
   const liquido = subtotal - compensado
+  // Art. 523 (se marcado): 10% sobre o líquido desta verba. Só informativo — não entra no total salvo.
+  const multa523 = art523?.multa ? liquido * 0.1 : 0
+  const hon523 = art523?.honorarios ? liquido * 0.1 : 0
   const nomeCalculo = `Cálculo de Atualização de Débitos — ${TIPO_UP[verba.tipo] || 'VERBA'}`
 
   // Memória de cálculo — taxas explícitas (para o magistrado conferir a conta)
@@ -131,7 +134,11 @@ export default function RelatorioCJ({ meta = {}, geradoEm, termoFinal, verba, re
       {/* ─────────── SHEET 2 ─────────── */}
       <section className="cj-sheet cj-break">
         <h2 style={S.h2}>Multa do Art. 523 do CPC</h2>
-        <KV rows={OPCOES_ART523} />
+        <KV rows={[
+          ['Aplicar multa moratória de 10%', art523?.multa ? 'Sim' : 'Não'],
+          ['Aplicar multa de honorários advocatícios de 10%', art523?.honorarios ? 'Sim' : 'Não'],
+          ...OPCOES_ART523,
+        ]} />
 
         <h2 style={S.h2}>Resultado</h2>
         <KV rows={[['Total geral', fmtBRL(liquido)]]} />
@@ -144,6 +151,9 @@ export default function RelatorioCJ({ meta = {}, geradoEm, termoFinal, verba, re
           ['Subtotal', fmtBRL(liquido)],
           ['Honorários Contratuais', fmtBRL(0)],
           ['Valor Total Geral', fmtBRL(liquido)],
+          ...(multa523 ? [['Multa do Art. 523, §1º, CPC (10%)', fmtBRL(multa523)]] : []),
+          ...(hon523 ? [['Honorários do Art. 523, §1º, CPC (10%)', fmtBRL(hon523)]] : []),
+          ...(multa523 || hon523 ? [['Total com o Art. 523 (se não houver pagamento voluntário)', fmtBRL(liquido + multa523 + hon523)]] : []),
         ]} />
 
         <h2 style={S.h2}>Débitos e Créditos</h2>
@@ -285,6 +295,9 @@ export default function RelatorioCJ({ meta = {}, geradoEm, termoFinal, verba, re
             ))}
           </div>
         ))}
+        <p style={{ margin: '12px 0 0', padding: '8px 10px', border: '1px solid #cbd5e1', borderRadius: 4, fontSize: '9pt', color: '#0f172a', lineHeight: 1.45 }}>
+          {DECLARACAO_TJDFT}
+        </p>
         <Foot geradoEm={geradoEm} />
       </section>
     </article>

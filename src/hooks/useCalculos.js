@@ -38,7 +38,7 @@ export function useCalculos() {
         observacoes:      dados.observacoes     || null,
         status:           'pendente',
         total_atualizado: totalAtualizado,
-        dados_calculo:    { verbas, termoFinal: extra.termoFinal || null, honorariosPercentual: extra.honorariosPercentual ?? null, creditos: extra.creditos || [] },
+        dados_calculo:    { verbas, termoFinal: extra.termoFinal || null, honorariosPercentual: extra.honorariosPercentual ?? null, creditos: extra.creditos || [], art523: extra.art523 || null },
         user_id:          (await supabase.auth.getUser()).data.user?.id,
       })
       .select()
