@@ -337,6 +337,35 @@ const isMaterialTipo = (t) => t === 'dano_material'
 // Parcelas efetivas de uma verba para o motor:
 //  - material: a tabela de descontos (cada um corrigido pela sua data)
 //  - demais (moral/honorários/outro): UMA parcela = valor fixo na data do arbitramento
+// Compensação (o "Crédito" do Cálculo Jurídico): o que o cliente recebeu do banco
+// (saque/TED do empréstimo). Corrigido e com juros pelos critérios do dano material,
+// abatido SÓ do dano material no total.
+function CompensacaoForm({ creditos, onChange, temMaterial }) {
+  const upd = (id, k, v) => onChange(creditos.map(c => c.id === id ? { ...c, [k]: v } : c))
+  return (
+    <div style={{ marginTop: 14, padding: '12px 14px', background: 'hsl(var(--secondary))', border: '1px solid hsl(var(--border))', borderRadius: 10 }}>
+      <p style={{ margin: 0, fontSize: 13, fontWeight: 700 }}>Compensação — valores recebidos pelo cliente (opcional)</p>
+      <p style={{ margin: '2px 0 10px', fontSize: 11.5, color: 'hsl(var(--muted-foreground))' }}>
+        Saque ou TED do empréstimo que o cliente recebeu. É corrigido e recebe juros pelos mesmos critérios do dano material e abate <b>só do dano material</b> (nunca do moral).
+      </p>
+      {!temMaterial && creditos.length > 0 && (
+        <p style={{ margin: '0 0 8px', fontSize: 12, color: 'var(--warning)' }}>⚠️ Sem verba de dano material: a compensação não será abatida.</p>
+      )}
+      {creditos.map(c => (
+        <div key={c.id} style={{ display: 'grid', gridTemplateColumns: '150px 140px 1fr auto', gap: 8, marginBottom: 8, alignItems: 'center' }}>
+          <input type="date" className="input-lex" aria-label="Data do recebimento" value={c.data || ''} onChange={e => upd(c.id, 'data', e.target.value)} />
+          <input type="text" inputMode="decimal" className="input-lex mono" aria-label="Valor recebido" placeholder="R$ 0,00" value={c.valor || ''} onChange={e => upd(c.id, 'valor', e.target.value)} />
+          <input className="input-lex" aria-label="Descrição" placeholder="Ex.: SAQUE / TED do empréstimo" value={c.descricao || ''} onChange={e => upd(c.id, 'descricao', e.target.value)} />
+          <button className="btn-danger" aria-label="Remover compensação" onClick={() => onChange(creditos.filter(x => x.id !== c.id))}><Trash2 size={12} /></button>
+        </div>
+      ))}
+      <button className="btn-secondary" onClick={() => onChange([...creditos, { id: uid(), data: '', valor: '', descricao: 'SAQUE' }])} style={{ fontSize: 13 }}>
+        <Plus size={14} /> Adicionar valor recebido
+      </button>
+    </div>
+  )
+}
+
 function parcelasDaVerba(v) {
   if (isMaterialTipo(v.tipo)) return v.parcelas || []
   const val = parseValorBR(v.valor)
@@ -398,7 +427,7 @@ export default function NovoCalculo() {
     processo: '', cliente: '', executada: '', vara: '',
     tipoDocumento: 'sentenca',
     dataDecisao: '', dataTransito: '', dataCitacao: '', dataAjuizamento: '',
-    termoFinal: hoje, honorariosPercentual: '', observacoes: '', verbas: [],
+    termoFinal: hoje, honorariosPercentual: '', observacoes: '', verbas: [], creditos: [],
   })
   const upd = (k, v) => setDados(d => ({ ...d, [k]: v }))
 
@@ -612,14 +641,15 @@ export default function NovoCalculo() {
         parcelas: parcelasDaVerba(v).map(p => ({ data: p.data, valor: parseValorBR(p.valor) })),
       }))
       const honPct = parseValorBR(d.honorariosPercentual)
-      const resultado = calcularProcesso(verbasCalc, { termoFinal, honorariosPercentual: honPct })
+      const creditos = (d.creditos || []).map(c => ({ data: c.data, valor: parseValorBR(c.valor), descricao: c.descricao }))
+      const resultado = calcularProcesso(verbasCalc, { termoFinal, honorariosPercentual: honPct, creditos })
       setProc(resultado)
 
       const agora = new Date()
       setGeradoEm(`${agora.toLocaleDateString('pt-BR')}, às ${agora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`)
 
       if (salvar) {
-        try { await salvarCalculo(d, d.verbas, resultado.totalGeral, { termoFinal, honorariosPercentual: honPct }) } catch (e) { console.warn('Falha ao salvar:', e) }
+        try { await salvarCalculo(d, d.verbas, resultado.totalGeral, { termoFinal, honorariosPercentual: honPct, creditos: d.creditos || [] }) } catch (e) { console.warn('Falha ao salvar:', e) }
       }
       setStep(4)
     } catch (e) {
@@ -656,6 +686,7 @@ export default function NovoCalculo() {
       termoFinal: dc.termoFinal || hoje,
       honorariosPercentual: dc.honorariosPercentual ?? '',
       observacoes: c.observacoes || '', verbas,
+      creditos: (dc.creditos || []).map(cr => ({ ...cr, id: uid() })),
     }
     setDados(d)
     const completo = verbas.length > 0 && verbas.every(v => {
@@ -700,7 +731,7 @@ export default function NovoCalculo() {
 
   function reset() {
     setProc(null); setExtracao(null); setDispositivo('')
-    setDados({ processo: '', cliente: '', executada: '', vara: '', tipoDocumento: 'sentenca', dataDecisao: '', dataTransito: '', dataCitacao: '', dataAjuizamento: '', termoFinal: hoje, observacoes: '', verbas: [] })
+    setDados({ processo: '', cliente: '', executada: '', vara: '', tipoDocumento: 'sentenca', dataDecisao: '', dataTransito: '', dataCitacao: '', dataAjuizamento: '', termoFinal: hoje, observacoes: '', verbas: [], creditos: [] })
     setStep(1)
   }
 
@@ -958,6 +989,9 @@ export default function NovoCalculo() {
                 value={dados.honorariosPercentual} onChange={e => upd('honorariosPercentual', e.target.value)}
                 style={{ width: 110, textAlign: 'center' }} />
             </div>
+
+            <CompensacaoForm creditos={dados.creditos || []} onChange={cs => upd('creditos', cs)}
+              temMaterial={dados.verbas.some(v => isMaterialTipo(v.tipo))} />
           </div>
         )}
 

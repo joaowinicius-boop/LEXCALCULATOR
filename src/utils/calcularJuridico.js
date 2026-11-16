@@ -204,7 +204,7 @@ export function calcularVerbaJuridica(verba, termoFinal) {
 /**
  * Consolida várias verbas + honorários de sucumbência (% sobre total corrigido).
  * @param verbas array de verbas (cada uma já com .serie/.juros)
- * @param opts { termoFinal, honorariosPercentual? }
+ * @param opts { termoFinal, honorariosPercentual?, creditos? }
  */
 export function calcularProcesso(verbas, opts = {}) {
   const termoFinal = opts.termoFinal || new Date().toISOString().split('T')[0]
@@ -218,8 +218,11 @@ export function calcularProcesso(verbas, opts = {}) {
   const subtotalSemHonorarios = principal + juros
 
   const honorariosPct = Number(opts.honorariosPercentual) || 0
-  // Honorários sobre o total já corrigido (principal + juros), conforme advogado.
+  // Honorários sobre o total já corrigido (principal + juros), ANTES da compensação —
+  // é como o escritório faz no Cálculo Jurídico (base = débitos, não débitos − créditos).
   const honorarios = subtotalSemHonorarios * (honorariosPct / 100)
+
+  const compensacao = calcularCompensacao(opts.creditos, resultados, termoFinal)
 
   return {
     termoFinal,
@@ -228,7 +231,44 @@ export function calcularProcesso(verbas, opts = {}) {
     juros,
     honorarios,
     honorariosPercentual: honorariosPct,
-    totalGeral: subtotalSemHonorarios + honorarios,
+    compensacao,
+    totalGeral: subtotalSemHonorarios + honorarios - compensacao.compensado,
+  }
+}
+
+/**
+ * Compensação (o "Crédito" do Cálculo Jurídico): valores que o cliente RECEBEU do banco
+ * (saque/TED do empréstimo). Cada crédito é corrigido desde a sua data e recebe os mesmos
+ * juros do dano material (mesmo índice, mesma taxa, mesmo início), e o total abate
+ * SOMENTE o dano material — nunca o moral. O que passar do material não é abatido.
+ * @param creditos [{ data, valor, descricao? }]
+ */
+export function calcularCompensacao(creditos, resultados, termoFinal) {
+  const vazio = { linhas: [], totalCorrigido: 0, totalJuros: 0, total: 0, compensado: 0, naoCompensado: 0, baseMaterial: 0 }
+  const validos = (creditos || []).filter(c => c?.data && Number(c.valor) > 0)
+  const material = resultados.filter(r => r.verba.tipo === 'dano_material')
+  if (!validos.length || !material.length) return vazio
+
+  const ref = material[0].verba            // critérios do material (índice, juros)
+  const pctJuros = percentualJuros(ref.juros, termoFinal)
+  const linhas = validos.map(c => {
+    const valor = Number(c.valor)
+    const fator = fatorCorrecao(ref.serie, c.data, termoFinal)
+    const valorCorrigido = valor * fator
+    const valorJuros = valorCorrigido * (pctJuros / 100)
+    return { data: c.data, descricao: c.descricao || 'Valor recebido', valor, fator, valorCorrigido, percentualJuros: pctJuros, valorJuros, total: valorCorrigido + valorJuros }
+  })
+  const total = linhas.reduce((a, l) => a + l.total, 0)
+  const baseMaterial = material.reduce((a, r) => a + r.resultado.subtotal, 0)
+  const compensado = Math.min(total, baseMaterial)
+  return {
+    linhas,
+    totalCorrigido: linhas.reduce((a, l) => a + l.valorCorrigido, 0),
+    totalJuros: linhas.reduce((a, l) => a + l.valorJuros, 0),
+    total,
+    compensado,
+    naoCompensado: total - compensado,
+    baseMaterial,
   }
 }
 

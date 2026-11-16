@@ -42,13 +42,17 @@ function KV({ rows }) {
   )
 }
 
-export default function RelatorioCJ({ meta = {}, geradoEm, termoFinal, verba, resultado }) {
+export default function RelatorioCJ({ meta = {}, geradoEm, termoFinal, verba, resultado, compensacao }) {
   const indiceNome = INDICE_NOME[verba.indice] || verba.indice
   const jurosLabel = LABEL_JUROS[verba.juros?.tipo] || 'Não aplicado'
   const jurosInicio = verba.juros?.dataInicio
   const principal = resultado.principalCorrigido
   const juros = resultado.totalJuros
   const subtotal = resultado.subtotal
+  // Compensação (créditos) só vem para o relatório do dano material
+  const cred = compensacao?.linhas?.length ? compensacao : null
+  const compensado = cred?.compensado || 0
+  const liquido = subtotal - compensado
   const nomeCalculo = `Cálculo de Atualização de Débitos — ${TIPO_UP[verba.tipo] || 'VERBA'}`
 
   // Memória de cálculo — taxas explícitas (para o magistrado conferir a conta)
@@ -130,15 +134,16 @@ export default function RelatorioCJ({ meta = {}, geradoEm, termoFinal, verba, re
         <KV rows={OPCOES_ART523} />
 
         <h2 style={S.h2}>Resultado</h2>
-        <KV rows={[['Total geral', fmtBRL(subtotal)]]} />
+        <KV rows={[['Total geral', fmtBRL(liquido)]]} />
 
         <h2 style={S.h2}>Totais</h2>
         <KV rows={[
           ['Principal', fmtBRL(subtotal)],
+          ...(cred ? [['(−) Compensação (créditos)', '− ' + fmtBRL(compensado)]] : []),
           ['Honorários de Sucumbência', fmtBRL(0)],
-          ['Subtotal', fmtBRL(subtotal)],
+          ['Subtotal', fmtBRL(liquido)],
           ['Honorários Contratuais', fmtBRL(0)],
-          ['Valor Total Geral', fmtBRL(subtotal)],
+          ['Valor Total Geral', fmtBRL(liquido)],
         ]} />
 
         <h2 style={S.h2}>Débitos e Créditos</h2>
@@ -152,20 +157,20 @@ export default function RelatorioCJ({ meta = {}, geradoEm, termoFinal, verba, re
           </thead>
           <tbody>
             {[
-              ['Principal (Inicial + Correção)', principal],
-              ['Juros', juros],
-              ['Multa', 0], ['Custas', 0], ['Despesas', 0],
-            ].map(([l, v], i) => (
+              ['Principal (Inicial + Correção)', principal, cred?.totalCorrigido || 0],
+              ['Juros', juros, cred?.totalJuros || 0],
+              ['Multa', 0, 0], ['Custas', 0, 0], ['Despesas', 0, 0],
+            ].map(([l, v, c], i) => (
               <tr key={i}>
                 <td style={S.td}>{l}</td>
                 <td style={S.tdr} className="mono">{fmtBRL(v)}</td>
-                <td style={S.tdr} className="mono">{fmtBRL(0)}</td>
+                <td style={S.tdr} className="mono">{fmtBRL(c)}</td>
               </tr>
             ))}
             <tr style={{ fontWeight: 700, background: '#f8fafc' }}>
               <td style={S.td}>Totais (sem multas 523 e honorários)</td>
               <td style={S.tdr} className="mono">{fmtBRL(subtotal)}</td>
-              <td style={S.tdr} className="mono">{fmtBRL(0)}</td>
+              <td style={S.tdr} className="mono">{fmtBRL(cred?.total || 0)}</td>
             </tr>
           </tbody>
         </table>
@@ -225,7 +230,47 @@ export default function RelatorioCJ({ meta = {}, geradoEm, termoFinal, verba, re
         </table>
 
         <h2 style={S.h2}>Créditos</h2>
-        <p style={{ fontSize: '9pt', color: '#64748b', margin: '4px 0' }}>Nenhuma parcela.</p>
+        {!cred ? (
+          <p style={{ fontSize: '9pt', color: '#64748b', margin: '4px 0' }}>Nenhuma parcela.</p>
+        ) : (
+          <>
+            <table className="cj-deb">
+              <thead>
+                <tr>
+                  {['Descrição', 'Data', 'Valor', 'Fator', 'Valor corrigido', 'Juros %', 'Juros', 'Total'].map((h, i) => (
+                    <th key={i} className={i >= 2 ? 'r' : ''}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {cred.linhas.map((l, i) => (
+                  <tr key={i}>
+                    <td>{l.descricao}</td>
+                    <td className="nw">{fmtData(l.data)}</td>
+                    <td className="r mono">{fmtBRL(l.valor)}</td>
+                    <td className="r mono">{fmtFator(l.fator)}</td>
+                    <td className="r mono">{fmtBRL(l.valorCorrigido)}</td>
+                    <td className="r mono">{fmtPct(l.percentualJuros)}</td>
+                    <td className="r mono">{fmtBRL(l.valorJuros)}</td>
+                    <td className="r mono" style={{ fontWeight: 700 }}>{fmtBRL(l.total)}</td>
+                  </tr>
+                ))}
+                <tr className="tot">
+                  <td colSpan={4}>Total</td>
+                  <td className="r mono">{fmtBRL(cred.totalCorrigido)}</td>
+                  <td></td>
+                  <td className="r mono">{fmtBRL(cred.totalJuros)}</td>
+                  <td className="r mono">{fmtBRL(cred.total)}</td>
+                </tr>
+              </tbody>
+            </table>
+            <p style={{ fontSize: '8.5pt', color: '#334155', margin: '6px 0 0', lineHeight: 1.45 }}>
+              Compensação dos valores recebidos pela parte Exequente, corrigidos pelo mesmo índice e com os mesmos juros de mora
+              do dano material, abatidos exclusivamente do dano material.
+              {cred.naoCompensado > 0.005 && ` O valor excedente (${fmtBRL(cred.naoCompensado)}) não foi abatido, pois a compensação está limitada ao dano material.`}
+            </p>
+          </>
+        )}
         <Foot geradoEm={geradoEm} />
       </section>
 

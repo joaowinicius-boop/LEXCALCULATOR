@@ -49,7 +49,8 @@ export function variaveisCumprimento(meta = {}, proc) {
   const moralOrig = sum(moral, r => r.resultado.linhas.filter(l => l.tipoLinha === 'Principal').reduce((a, l) => a + l.valor, 0))
   const moralAtu = sum(moral, r => r.resultado.subtotal)
   const materialOrig = sum(material, r => r.resultado.linhas.reduce((a, l) => a + l.valor, 0)) // inclui dobro (valor da inicial)
-  const materialAtu = sum(material, r => r.resultado.subtotal)
+  const compensado = proc.compensacao?.compensado || 0
+  const materialAtu = sum(material, r => r.resultado.subtotal) - compensado   // líquido da compensação
 
   const honorarios = proc.honorarios || 0
   const honPct = proc.honorariosPercentual || 0
@@ -63,6 +64,9 @@ export function variaveisCumprimento(meta = {}, proc) {
         ? `${moral.length ? 'Já no' : `Conforme ${tipoDoc}, no`} que diz respeito aos danos materiais, fora determinada a devolução em dobro dos descontos realizados em desfavor da parte Exequente, que perfazem ${fmtBRL(materialOrig)}.`
         : `${moral.length ? 'Já no' : `Conforme ${tipoDoc}, no`} que diz respeito aos danos materiais, fora determinada a devolução dos descontos realizados em desfavor da parte Exequente, que perfazem ${fmtBRL(materialOrig)}.`)
     : ''
+  const fraseCompensacao = compensado > 0
+    ? ` Do valor atualizado dos danos materiais abate-se a compensação de ${fmtBRL(compensado)}, referente aos valores recebidos pela parte Exequente, atualizados pelos mesmos critérios.`
+    : ''
   const fraseHonorarios = honorarios > 0
     ? `Os honorários advocatícios foram arbitrados ao percentual de ${String(honPct).replace('.', ',')}% sobre o valor da condenação.`
     : 'Não há honorários advocatícios sucumbenciais a executar (arts. 54 e 55 da Lei nº 9.099/95).'
@@ -73,7 +77,7 @@ export function variaveisCumprimento(meta = {}, proc) {
       PROCESSO: meta.processo || '____________',
       CLIENTE: (meta.cliente || '____________').toUpperCase(),
       FRASE_MORAL: fraseMoral,
-      FRASE_MATERIAL: fraseMaterial,
+      FRASE_MATERIAL: fraseMaterial + fraseCompensacao,
       FRASE_HONORARIOS: fraseHonorarios,
       MORAL_ORIG: fmtBRL(moralOrig),
       MORAL_ATU: fmtBRL(moralAtu),

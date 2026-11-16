@@ -73,6 +73,7 @@ export function gerarCumprimentoHtml(meta = {}, proc, opts = {}) {
 
   const honorarios = proc.honorarios || 0
   const total = proc.totalGeral
+  const compensado = proc.compensacao?.compensado || 0
   const dataExt = (() => { const d = new Date(); return `${d.getDate()} de ${MESES[d.getMonth()]} de ${d.getFullYear()}` })()
   const comarca = meta.vara || 'Comarca de Manaus/AM'
   const cidade = (opts.cidade || 'Manaus')
@@ -86,6 +87,9 @@ export function gerarCumprimentoHtml(meta = {}, proc, opts = {}) {
   const descHon = honorarios > 0
     ? `Os honorários advocatícios sucumbenciais foram arbitrados em ${(proc.honorariosPercentual || 0).toLocaleString('pt-BR')}% sobre o valor da condenação, ora atualizados.`
     : 'Os honorários advocatícios sucumbenciais não foram arbitrados.'
+  const descComp = compensado > 0
+    ? `Do dano material abate-se a compensação de ${fmtBRL(compensado)}, referente aos valores recebidos pela parte Exequente, atualizados pelos mesmos critérios do dano material.`
+    : ''
 
   return `
   <div class="center b" style="font-size:12pt">EXCELENTÍSSIMO(A) SENHOR(A) DOUTOR(A) JUIZ(A) DE DIREITO DA ${esc(comarca).toUpperCase()}</div>
@@ -95,13 +99,14 @@ export function gerarCumprimentoHtml(meta = {}, proc, opts = {}) {
   <p style="text-indent:2cm"><b>${esc(meta.cliente || '____________')}</b>, já qualificado(a) nos autos do processo em epígrafe, por intermédio de seu advogado que esta subscreve, vem, respeitosamente, à presença de Vossa Excelência, considerando o trânsito em julgado, requerer o <b>CUMPRIMENTO DE SENTENÇA</b>, nos termos do art. 523 do CPC, em desfavor de <b>${esc(meta.executada || '____________')}</b>, pelos fundamentos a seguir.</p>
 
   <p class="b">I. DOS CÁLCULOS DA EXECUÇÃO</p>
-  <p style="text-indent:2cm">${descMaterial} ${descMoral} ${descHon}</p>
+  <p style="text-indent:2cm">${descMaterial} ${descComp} ${descMoral} ${descHon}</p>
   <p style="text-indent:2cm">Assim, apresenta-se a planilha de débitos, atualizada até ${fmtData(proc.termoFinal)}, calculada com índices oficiais (IBGE/Banco Central):</p>
 
   <table>
     <thead><tr><th>VERBA</th><th class="right">VALOR ATUALIZADO</th></tr></thead>
     <tbody>
       ${linhasPlanilha}
+      ${compensado > 0 ? `<tr><td class="b">(−) COMPENSAÇÃO — VALORES RECEBIDOS (abatida do dano material)</td><td class="right mono">− ${fmtBRL(compensado)}</td></tr>` : ''}
       ${honorarios > 0 ? `<tr><td class="b">HONORÁRIOS DE SUCUMBÊNCIA (${(proc.honorariosPercentual || 0).toLocaleString('pt-BR')}%)</td><td class="right mono">${fmtBRL(honorarios)}</td></tr>` : ''}
       <tr><td class="b">TOTAL ATUALIZADO</td><td class="right b mono">${fmtBRL(total)}</td></tr>
     </tbody>
