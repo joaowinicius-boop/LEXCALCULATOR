@@ -3,23 +3,23 @@
 // (só no ambiente do servidor — nunca no código). Exige usuário autenticado
 // (JWT do Supabase no header Authorization) e limita tamanho/quantidade de docs.
 
+import { SUPABASE_URL, SUPABASE_ANON } from "../src/lib/supabase.js"
+
 export const config = { maxDuration: 60 }
 
 // flash-lite: estável e rápido (~5 s) nos testes de 16/11/2026; os flash maiores davam 503
 // ou ~50 s. GEMINI_MODEL na Vercel troca o principal sem mexer no código.
 const MODELOS = [process.env.GEMINI_MODEL || "gemini-3.1-flash-lite", "gemini-3.8-flash"]
 
-// Decodifica o payload do JWT do Supabase (sem verificar assinatura — só checa
-// role/exp, paridade com o gate anterior) para garantir que há um usuário logado.
-function quemChama(req) {
+// Pergunta ao próprio Supabase Auth se o token é de um usuário logado de verdade
+// (confere assinatura e expiração). Antes só líamos o payload, e um token forjado passava.
+async function usuarioLogado(req) {
+  const tok = (req.headers.authorization || "").replace(/^Bearer\s+/i, "")
+  if (!tok) return false
   try {
-    const tok = (req.headers.authorization || "").replace(/^Bearer\s+/i, "")
-    const payload = tok.split(".")[1].replace(/-/g, "+").replace(/_/g, "/")
-    const p = JSON.parse(Buffer.from(payload, "base64").toString("utf8"))
-    const exp = (p.exp || 0) * 1000
-    if (exp && Date.now() > exp) return { role: "expired", sub: "" }
-    return { role: p.role || "anon", sub: p.sub || "" }
-  } catch { return { role: "anon", sub: "" } }
+    const r = await fetch(`${SUPABASE_URL}/auth/v1/user`, { headers: { apikey: SUPABASE_ANON, Authorization: `Bearer ${tok}` } })
+    return r.ok && !!(await r.json())?.id
+  } catch { return false }
 }
 
 const SYSTEM = `Você é um extrator de dados de petições e decisões judiciais brasileiras para CUMPRIMENTO DE SENTENÇA. Leia os documentos e chame a função registrar_calculo.
@@ -81,8 +81,7 @@ export default async function handler(req, res) {
   if (req.method === "OPTIONS") return res.status(200).end()
   if (req.method !== "POST") return res.status(405).json({ ok: false, error: "Use POST" })
 
-  const quem = quemChama(req)
-  if (quem.role !== "authenticated" || !quem.sub) {
+  if (!(await usuarioLogado(req))) {
     return res.status(401).json({ ok: false, error: "Faça login para usar a extração por IA." })
   }
 
