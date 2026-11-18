@@ -53,7 +53,7 @@ export function useCalculos() {
         valor_original:    v.tipo === 'dano_material'
                              ? (v.parcelas || []).reduce((a, p) => a + parseValor(p.valor), 0)
                              : parseValor(v.valor),
-        em_dobro:          v.tipo === 'dano_material' ? !!v.emDobro : false,
+        em_dobro:          v.tipo === 'dano_material' && v.modo !== 'conversao' ? !!v.emDobro : false,
         indice:            v.indice,
         termo_inicial:     'decisao',
         data_personalizada:null,

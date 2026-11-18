@@ -61,7 +61,7 @@ export default function Relatorio({ relatorio }) {
   // Honorários não geram relatório próprio — entram na petição e nos totais.
   const reports = proc.resultados.filter(r => r.verba.tipo !== 'honorarios')
   // A compensação aparece no relatório do (primeiro) dano material, onde ela é abatida.
-  const materialComp = reports.find(r => r.verba.tipo === 'dano_material')
+  const materialComp = reports.find(r => r.verba.tipo === 'dano_material' && r.verba.modo !== 'conversao')
   const peticaoHtml = gerarCumprimentoHtml(meta, proc)
   const totalDocs = reports.length + 1
   const slug = (meta.processo || '').replace(/[^\d]/g, '') || 's-n'

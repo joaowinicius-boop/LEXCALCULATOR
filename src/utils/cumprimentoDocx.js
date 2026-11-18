@@ -11,7 +11,7 @@
  *  3. devolvemos o arquivo — Word abre como se tivesse sido feito no modelo.
  */
 import { fmtBRL } from './calcularJuridico.js'
-import { valorExtenso, fraseArt523 } from './cumprimento.js'
+import { valorExtenso, fraseArt523, fraseConversao } from './cumprimento.js'
 import { DECLARACAO_TJDFT } from '../data/textosRelatorio.js'
 // Modelo do escritório EMBUTIDO no bundle (data URI) — o download nunca depende de
 // arquivo no servidor (sem SPA-fallback, sem corrida com deploy, sem cache velho).
@@ -42,14 +42,17 @@ function cortarElemento(xml, marcador, tag) {
 /** Monta tokens + lista de remoções a partir do cálculo consolidado (proc) + metadados. */
 export function variaveisCumprimento(meta = {}, proc) {
   const moral = proc.resultados.filter(r => r.verba.tipo === 'dano_moral')
-  const material = proc.resultados.filter(r => r.verba.tipo === 'dano_material')
-  const temDobro = material.some(r => r.verba.emDobro)
+  const material = proc.resultados.filter(r => r.verba.tipo === 'dano_material')   // restituição + conversão (linhas da tabela)
+  const restituicao = material.filter(r => r.verba.modo !== 'conversao')
+  const conv = material.filter(r => r.verba.modo === 'conversao')
+  const temDobro = restituicao.some(r => r.verba.emDobro)
   const tipoDoc = meta.tipoDocumento === 'acordao' ? 'acórdão' : 'sentença'
 
   const sum = (arr, f) => arr.reduce((a, r) => a + f(r), 0)
   const moralOrig = sum(moral, r => r.resultado.linhas.filter(l => l.tipoLinha === 'Principal').reduce((a, l) => a + l.valor, 0))
   const moralAtu = sum(moral, r => r.resultado.subtotal)
   const materialOrig = sum(material, r => r.resultado.linhas.reduce((a, l) => a + l.valor, 0)) // inclui dobro (valor da inicial)
+  const restOrig = sum(restituicao, r => r.resultado.linhas.reduce((a, l) => a + l.valor, 0))
   const compensado = proc.compensacao?.compensado || 0
   const materialAtu = sum(material, r => r.resultado.subtotal) - compensado   // líquido da compensação
 
@@ -60,10 +63,10 @@ export function variaveisCumprimento(meta = {}, proc) {
   const fraseMoral = moral.length
     ? `Conforme ${tipoDoc}, a parte Executada foi condenada a indenizar a parte Exequente em danos morais, no valor de ${fmtBRL(moralOrig)}.`
     : ''
-  const fraseMaterial = material.length
+  const fraseMaterial = restituicao.length
     ? (temDobro
-        ? `${moral.length ? 'Já no' : `Conforme ${tipoDoc}, no`} que diz respeito aos danos materiais, fora determinada a devolução em dobro dos descontos realizados em desfavor da parte Exequente, que perfazem ${fmtBRL(materialOrig)}.`
-        : `${moral.length ? 'Já no' : `Conforme ${tipoDoc}, no`} que diz respeito aos danos materiais, fora determinada a devolução dos descontos realizados em desfavor da parte Exequente, que perfazem ${fmtBRL(materialOrig)}.`)
+        ? `${moral.length ? 'Já no' : `Conforme ${tipoDoc}, no`} que diz respeito aos danos materiais, fora determinada a devolução em dobro dos descontos realizados em desfavor da parte Exequente, que perfazem ${fmtBRL(restOrig)}.`
+        : `${moral.length ? 'Já no' : `Conforme ${tipoDoc}, no`} que diz respeito aos danos materiais, fora determinada a devolução dos descontos realizados em desfavor da parte Exequente, que perfazem ${fmtBRL(restOrig)}.`)
     : ''
   const fraseCompensacao = compensado > 0
     ? ` Do valor atualizado dos danos materiais abate-se a compensação de ${fmtBRL(compensado)}, referente aos valores recebidos pela parte Exequente, atualizados pelos mesmos critérios.`
@@ -78,7 +81,7 @@ export function variaveisCumprimento(meta = {}, proc) {
       PROCESSO: meta.processo || '____________',
       CLIENTE: (meta.cliente || '____________').toUpperCase(),
       FRASE_MORAL: fraseMoral,
-      FRASE_MATERIAL: fraseMaterial + fraseCompensacao,
+      FRASE_MATERIAL: [fraseMaterial + fraseCompensacao, fraseConversao(conv, tipoDoc)].filter(Boolean).join(' '),
       // o modelo tem parágrafos fixos: 523 e declaração do TJDFT vão junto da frase dos honorários
       FRASE_HONORARIOS: [fraseHonorarios, (proc.art523?.valorMulta || proc.art523?.valorHonorarios) ? fraseArt523(proc.art523) : '', DECLARACAO_TJDFT.replace('acima', 'abaixo')].filter(Boolean).join(' '),
       MORAL_ORIG: fmtBRL(moralOrig),

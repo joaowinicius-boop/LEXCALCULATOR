@@ -32,6 +32,97 @@ function Foot({ geradoEm }) {
   )
 }
 
+function Cabecalho({ titulo }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '2px solid #0ea5e9', paddingBottom: 10, marginBottom: 6 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+        <div style={{ width: 34, height: 34, background: 'linear-gradient(135deg,#0ea5e9,#2563eb)', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <Scale size={18} color="#fff" />
+        </div>
+        <div>
+          <p style={{ margin: 0, fontWeight: 800, fontSize: '13pt' }}>LEX CALCULATOR</p>
+          <p style={{ margin: 0, fontSize: '8.5pt', color: '#64748b' }}>Nicolas Gomes Sociedade Individual de Advocacia</p>
+        </div>
+      </div>
+      <p style={{ margin: 0, fontSize: '11pt', fontWeight: 700, color: '#0f172a' }}>{titulo}</p>
+    </div>
+  )
+}
+
+// Revisão da RMC/RCC — conversão em empréstimo (método 1 do CJ): evolução do saldo devedor.
+function RelatorioConversao({ meta, geradoEm, termoFinal, verba, resultado: r }) {
+  const devedor = r.saldoDevedor > 0.005
+  const cols = ['Nº', 'Data', 'Valor descontado', 'Saldo anterior', 'Taxa', 'Juros', 'Amortização', 'Saques compl.', 'Saldo atual']
+  return (
+    <article className="cj-report">
+      <section className="cj-sheet">
+        <Cabecalho titulo="Revisão da RMC/RCC" />
+
+        <h2 style={S.h2}>Dados do Cliente</h2>
+        <KV rows={[['Nome', meta.cliente || '—'], ['Processo nº', meta.processo || '—'], ['Parte executada', meta.executada || '—']]} />
+
+        <h2 style={S.h2}>Dados do Cálculo</h2>
+        <KV rows={[
+          ['Nome do cálculo', `Conversão do cartão consignado em empréstimo (método 1)${verba.descricao ? ` — ${verba.descricao}` : ''}`],
+          ['Data base', fmtData(termoFinal)],
+          ['Valor do empréstimo (valor efetivamente recebido)', fmtBRL(r.valorEmprestimo)],
+          ...(verba.dataEmprestimo ? [['Data do empréstimo', fmtData(verba.dataEmprestimo)]] : []),
+          ['Taxa de juros do contrato', `${fmtPct(r.taxa)} ao mês`],
+          ['Descontos lançados', String(r.linhas.length)],
+        ]} />
+
+        <h2 style={S.h2}>Resultado</h2>
+        <KV rows={[
+          ['Total descontado', fmtBRL(r.totalDescontos)],
+          ['Parte dos descontos que pagou juros do contrato', fmtBRL(r.jurosContrato)],
+          ['Parte dos descontos que amortizou o empréstimo', fmtBRL(r.totalAmortizacao)],
+          ...(r.totalSaques ? [['(+) Saques complementares', fmtBRL(r.totalSaques)]] : []),
+          ['Saldo devedor final', fmtBRL(r.saldoFinal)],
+          devedor
+            ? ['Saldo devedor remanescente (a pagar pela parte Exequente)', fmtBRL(r.saldoDevedor)]
+            : ['Valor a restituir à parte Exequente', fmtBRL(r.aRestituir)],
+        ]} />
+        <p style={{ margin: '4px 0 0', fontSize: '8.5pt', color: '#334155', lineHeight: 1.45 }}>
+          O contrato de cartão de crédito consignado (RMC/RCC) foi recalculado como empréstimo consignado, a partir do valor
+          efetivamente recebido. Em cada desconto, aplicam-se juros à taxa do contrato sobre o saldo devedor anterior; o restante
+          do desconto amortiza o saldo, e os saques complementares somam-se a ele. Saldo negativo indica pagamento a maior, sobre
+          o qual a mesma taxa continua a incidir em favor do consumidor.
+        </p>
+
+        <h2 style={S.h2}>Evolução do Saldo Devedor</h2>
+        <table className="cj-deb">
+          <thead><tr>{cols.map((h, i) => <th key={i} className={i >= 2 ? 'r' : ''}>{h}</th>)}</tr></thead>
+          <tbody>
+            {r.linhas.map(l => (
+              <tr key={l.n}>
+                <td>{l.n}</td>
+                <td className="nw">{fmtData(l.data)}</td>
+                <td className="r mono">{fmtBRL(l.valor)}</td>
+                <td className="r mono">{fmtBRL(l.saldoAnterior)}</td>
+                <td className="r mono">{fmtPct(l.taxa)}</td>
+                <td className="r mono">{fmtBRL(l.juros)}</td>
+                <td className="r mono">{fmtBRL(l.amortizacao)}</td>
+                <td className="r mono">{fmtBRL(l.saque)}</td>
+                <td className="r mono" style={{ fontWeight: 700 }}>{fmtBRL(l.saldo)}</td>
+              </tr>
+            ))}
+            <tr className="tot">
+              <td colSpan={2}>Totais</td>
+              <td className="r mono">{fmtBRL(r.totalDescontos)}</td>
+              <td></td><td></td>
+              <td className="r mono">{fmtBRL(r.jurosContrato)}</td>
+              <td className="r mono">{fmtBRL(r.totalAmortizacao)}</td>
+              <td className="r mono">{fmtBRL(r.totalSaques)}</td>
+              <td className="r mono">{fmtBRL(r.saldoFinal)}</td>
+            </tr>
+          </tbody>
+        </table>
+        <Foot geradoEm={geradoEm} />
+      </section>
+    </article>
+  )
+}
+
 function KV({ rows }) {
   return (
     <table style={S.kv}><tbody>
@@ -43,6 +134,7 @@ function KV({ rows }) {
 }
 
 export default function RelatorioCJ({ meta = {}, geradoEm, termoFinal, verba, resultado, compensacao, art523 }) {
+  if (resultado.metodo === 'conversao') return <RelatorioConversao meta={meta} geradoEm={geradoEm} termoFinal={termoFinal} verba={verba} resultado={resultado} />
   const indiceNome = INDICE_NOME[verba.indice] || verba.indice
   const jurosLabel = LABEL_JUROS[verba.juros?.tipo] || 'Não aplicado'
   const jurosInicio = verba.juros?.dataInicio
@@ -87,18 +179,7 @@ export default function RelatorioCJ({ meta = {}, geradoEm, termoFinal, verba, re
     <article className="cj-report">
       {/* ─────────── SHEET 1 ─────────── */}
       <section className="cj-sheet cj-break">
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderBottom: '2px solid #0ea5e9', paddingBottom: 10, marginBottom: 6 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-            <div style={{ width: 34, height: 34, background: 'linear-gradient(135deg,#0ea5e9,#2563eb)', borderRadius: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-              <Scale size={18} color="#fff" />
-            </div>
-            <div>
-              <p style={{ margin: 0, fontWeight: 800, fontSize: '13pt' }}>LEX CALCULATOR</p>
-              <p style={{ margin: 0, fontSize: '8.5pt', color: '#64748b' }}>Nicolas Gomes Sociedade Individual de Advocacia</p>
-            </div>
-          </div>
-          <p style={{ margin: 0, fontSize: '11pt', fontWeight: 700, color: '#0f172a' }}>Cálculo de Atualização de Débitos</p>
-        </div>
+        <Cabecalho titulo="Cálculo de Atualização de Débitos" />
 
         <h2 style={S.h2}>Dados do Cliente</h2>
         <KV rows={[['Nome', meta.cliente || '—'], ['Processo nº', meta.processo || '—'], ['Parte executada', meta.executada || '—']]} />

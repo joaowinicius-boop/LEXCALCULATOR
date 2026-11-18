@@ -164,6 +164,7 @@ export function percentualJuros(juros, termoFinal) {
  * @param termoFinal data do cálculo (ISO)
  */
 export function calcularVerbaJuridica(verba, termoFinal) {
+  if (verba.modo === 'conversao') return calcularConversaoEmprestimo(verba)
   const pctJuros = percentualJuros(verba.juros, termoFinal)
   const linhas = []
 
@@ -198,6 +199,58 @@ export function calcularVerbaJuridica(verba, termoFinal) {
     totalJuros,
     subtotal,                 // principal corrigido + juros (sem honorários)
     percentualJuros: pctJuros,
+  }
+}
+
+/**
+ * Revisão da RMC/RCC — Método 1 do Cálculo Jurídico ("conversão em empréstimo").
+ * O cartão é recalculado como consignado comum, a partir do valor efetivamente recebido:
+ *   a cada desconto: juros = saldo anterior × taxa do contrato;
+ *                    amortização = desconto − juros;
+ *                    saldo = saldo anterior − amortização + saques complementares do período.
+ * Saldo negativo = pagamento a maior; a taxa continua correndo sobre ele, a favor do cliente
+ * (como no CJ). Precisão cheia, sem arredondar por linha (o CJ faz assim). Como no CJ, o saldo
+ * final não é atualizado da última parcela até o termo final.
+ * Cada saque complementar entra na linha do 1º desconto do mesmo mês ou posterior (depois
+ * do último desconto, entra na última linha).
+ * @param verba { valorEmprestimo, taxa (% a.m.), parcelas [{data, valor}], saques [{data, valor}] }
+ */
+export function calcularConversaoEmprestimo(verba) {
+  const taxa = (Number(verba.taxa) || 0) / 100
+  const parcelas = (verba.parcelas || []).filter(p => p.data).slice().sort((a, b) => a.data.localeCompare(b.data))
+  const saques = (verba.saques || []).filter(q => q.data && Number(q.valor) > 0).slice().sort((a, b) => a.data.localeCompare(b.data))
+  let saldo = Number(verba.valorEmprestimo) || 0
+  let iq = 0
+  const linhas = parcelas.map((p, i) => {
+    const valor = Number(p.valor) || 0
+    const saldoAnterior = saldo
+    const juros = saldoAnterior * taxa
+    const amortizacao = valor - juros
+    let saque = 0
+    const ultima = i === parcelas.length - 1
+    while (iq < saques.length && (ultima || saques[iq].data.slice(0, 7) <= p.data.slice(0, 7))) saque += Number(saques[iq++].valor)
+    saldo = saldoAnterior - amortizacao + saque
+    return { n: i + 1, data: p.data, valor, saldoAnterior, taxa: taxa * 100, juros, amortizacao, saque, saldo }
+  })
+  const soma = (k) => linhas.reduce((a, l) => a + l[k], 0)
+  const aRestituir = Math.max(0, -saldo)
+  return {
+    metodo: 'conversao',
+    linhas,
+    valorEmprestimo: Number(verba.valorEmprestimo) || 0,
+    taxa: taxa * 100,
+    totalDescontos: soma('valor'),
+    jurosContrato: soma('juros'),
+    totalAmortizacao: soma('amortizacao'),
+    totalSaques: soma('saque'),
+    saldoFinal: saldo,
+    aRestituir,                       // banco deve ao cliente
+    saldoDevedor: Math.max(0, saldo), // cliente ainda deve (não abate das outras verbas)
+    // campos que o resto do app soma: o que vai para a execução é só o valor a restituir
+    principalCorrigido: aRestituir,
+    totalJuros: 0,
+    subtotal: aRestituir,
+    percentualJuros: 0,
   }
 }
 
@@ -258,7 +311,8 @@ export function calcularProcesso(verbas, opts = {}) {
 export function calcularCompensacao(creditos, resultados, termoFinal) {
   const vazio = { linhas: [], totalCorrigido: 0, totalJuros: 0, total: 0, compensado: 0, naoCompensado: 0, baseMaterial: 0 }
   const validos = (creditos || []).filter(c => c?.data && Number(c.valor) > 0)
-  const material = resultados.filter(r => r.verba.tipo === 'dano_material')
+  // No modo conversão o empréstimo recebido já está no cálculo: não compensa de novo.
+  const material = resultados.filter(r => r.verba.tipo === 'dano_material' && r.verba.modo !== 'conversao')
   if (!validos.length || !material.length) return vazio
 
   const ref = material[0].verba            // critérios do material (índice, juros)

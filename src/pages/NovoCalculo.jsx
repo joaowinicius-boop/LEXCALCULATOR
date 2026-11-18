@@ -106,10 +106,49 @@ function ParcelaEditor({ parcelas, onChange }) {
   )
 }
 
+// Campos do modo "conversão em empréstimo" (RMC/RCC, método 1): empréstimo, taxa e saques complementares.
+function ConversaoCampos({ verba, upd }) {
+  const saques = verba.saques || []
+  const updQ = (id, k, v) => upd('saques', saques.map(q => q.id === id ? { ...q, [k]: v } : q))
+  const taxa = parseValorBR(verba.taxaContrato)
+  return (
+    <div style={{ marginTop: '12px', padding: '12px 14px', border: '1px solid hsl(var(--primary) / 0.45)', borderRadius: '10px', background: 'hsl(var(--primary) / 0.07)' }}>
+      <p style={{ margin: '0 0 4px', fontSize: '13px', fontWeight: 700, color: 'hsl(var(--primary))' }}>Conversão em empréstimo consignado</p>
+      <p style={{ margin: '0 0 10px', fontSize: '11.5px', color: 'hsl(var(--muted-foreground))' }}>
+        A cada desconto: juros = saldo × taxa; o resto do desconto amortiza o saldo. Saldo negativo = o banco deve ao cliente. Não lance o saque de novo em “Compensação”.
+      </p>
+      <Grid cols={3}>
+        <Field label="Valor do empréstimo (saque)" required>
+          <input type="text" inputMode="decimal" className="input-lex mono" placeholder="Ex.: 1.164,10" value={verba.valorEmprestimo ?? ''} onChange={e => upd('valorEmprestimo', e.target.value)} />
+        </Field>
+        <Field label="Data do empréstimo">
+          <input type="date" className="input-lex" value={verba.dataEmprestimo || ''} onChange={e => upd('dataEmprestimo', e.target.value)} />
+        </Field>
+        <Field label="Taxa do contrato (% ao mês)" required hint="Taxa média do consignado no mês do contrato (Bacen)">
+          <input type="text" inputMode="decimal" className="input-lex mono" placeholder="Ex.: 1,93" value={verba.taxaContrato ?? ''} onChange={e => upd('taxaContrato', e.target.value)} />
+        </Field>
+      </Grid>
+      {taxa > 3.06 && <p style={{ margin: '6px 0 0', fontSize: '12px', color: 'var(--warning)' }}>⚠️ Acima do teto do INSS para cartão consignado (3,06% a.m.). Confira a taxa.</p>}
+      <p style={{ margin: '12px 0 6px', fontSize: '13px', fontWeight: 600 }}>Saques complementares (opcional)</p>
+      {saques.map(q => (
+        <div key={q.id} style={{ display: 'flex', gap: 8, marginBottom: 6, alignItems: 'center' }}>
+          <input type="date" className="input-lex" aria-label="Data do saque complementar" value={q.data || ''} onChange={e => updQ(q.id, 'data', e.target.value)} style={{ flex: '0 0 170px' }} />
+          <input type="text" inputMode="decimal" className="input-lex mono" aria-label="Valor do saque complementar" placeholder="R$ 0,00" value={q.valor || ''} onChange={e => updQ(q.id, 'valor', e.target.value)} style={{ flex: 1 }} />
+          <button className="btn-danger" aria-label="Remover saque" onClick={() => upd('saques', saques.filter(x => x.id !== q.id))}><Trash2 size={12} /></button>
+        </div>
+      ))}
+      <button className="btn-secondary" onClick={() => upd('saques', [...saques, { id: uid(), data: '', valor: '' }])} style={{ fontSize: '12px', padding: '6px 12px' }}>
+        <Plus size={13} /> Adicionar saque complementar
+      </button>
+    </div>
+  )
+}
+
 // ─── Formulário de uma verba ──────────────────────────────────────────────────
 function VerbaForm({ verba, onChange, onRemove }) {
   const upd = (k, v) => onChange({ ...verba, [k]: v })
   const isMaterial = isMaterialTipo(verba.tipo)
+  const conversao = isConversao(verba)
   const [impErr, setImpErr] = useState('')
 
   async function importarPlanilha(file) {
@@ -173,7 +212,7 @@ function VerbaForm({ verba, onChange, onRemove }) {
   return (
     <div className="card-elevated fade-in" style={{ padding: '16px', marginBottom: '12px' }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '16px' }}>
-        <h4 style={{ margin: 0, fontSize: '14px', fontWeight: 600, color: 'hsl(var(--foreground))' }}>{TIPO_VERBA[verba.tipo] || 'Verba'}</h4>
+        <h4 style={{ margin: 0, fontSize: '14px', fontWeight: 600, color: 'hsl(var(--foreground))' }}>{TIPO_VERBA[verba.tipo] || 'Verba'}{conversao ? ' — conversão em empréstimo (RMC/RCC)' : ''}</h4>
         <button className="btn-danger" onClick={onRemove}><Trash2 size={12} /> Remover</button>
       </div>
       <Grid cols={2}>
@@ -186,6 +225,15 @@ function VerbaForm({ verba, onChange, onRemove }) {
             <option value="outro">Outra Verba</option>
           </select>
         </Field>
+        {isMaterial && (
+          <Field label="Forma de cálculo" required hint={conversao ? 'Método 1 do Cálculo Jurídico: o cartão vira consignado e os descontos amortizam o valor recebido' : undefined}>
+            <select className="input-lex" value={verba.modo || 'restituicao'} onChange={e => upd('modo', e.target.value)}>
+              <option value="restituicao">Restituição dos descontos (correção + juros)</option>
+              <option value="conversao">Conversão em empréstimo — RMC/RCC (método 1)</option>
+            </select>
+          </Field>
+        )}
+        {!conversao && <>
         <Field label="Índice de correção" required hint={!isMaterial ? 'Dano moral: usualmente SELIC (englobando juros) ou IPCA-E' : undefined}>
           <select className="input-lex" value={verba.indice} onChange={e => upd('indice', e.target.value)}>
             <option value="INPC">INPC</option>
@@ -205,6 +253,7 @@ function VerbaForm({ verba, onChange, onRemove }) {
             {jurosSuspeitos && <p style={{ margin: '4px 0 0', fontSize: '12px', color: 'var(--warning)' }}>⚠️ Anterior ao 1º desconto ({fmtData(primeiraData)}) — confira a data da citação na intimação/AR.</p>}
           </Field>
         )}
+        </>}
         <Field label="Descrição (opcional)">
           <input className="input-lex" placeholder={isMaterial ? 'Ex.: Seguro Mais Proteção' : 'Ex.: Dano moral'} value={verba.descricao} onChange={e => upd('descricao', e.target.value)} />
         </Field>
@@ -218,12 +267,14 @@ function VerbaForm({ verba, onChange, onRemove }) {
               <span><strong>Confira os descontos.</strong> A tabela da inicial é escaneada e a IA pode confundir “valor total” com “valor em dobro”. Para precisão, use <strong>★ Importar planilha</strong> (.xlsx) abaixo — os valores exatos substituem estes.</span>
             </div>
           )}
+          {conversao ? <ConversaoCampos verba={verba} upd={upd} /> : (
           <div style={{ marginTop: '12px' }}>
             <label style={{ display: 'flex', alignItems: 'center', gap: '8px', cursor: 'pointer', fontSize: '14px' }}>
               <input type="checkbox" checked={verba.emDobro} onChange={e => upd('emDobro', e.target.checked)} style={{ accentColor: 'hsl(var(--primary))', width: '15px', height: '15px' }} />
               Repetição do indébito — em dobro (cada parcela conta 2x)
             </label>
           </div>
+          )}
           <div style={{ marginTop: '12px' }}>
             <Field label="Total dos descontos informado na inicial" hint="A soma da tabela / valor da restituição declarado na petição — base da geração e da conferência">
               <input type="text" inputMode="decimal" className="input-lex mono" placeholder="Ex.: 519,64" value={verba.totalDeclarado ?? ''} onChange={e => upd('totalDeclarado', e.target.value)} style={{ maxWidth: 240 }} />
@@ -330,9 +381,33 @@ const VERBA_DEFAULT = {
   totalDeclarado: '', periodoInicio: '', periodoFim: '', parcelas: [],
   // dano moral / honorários / outro → valor fixo arbitrado pelo juiz (sem parcelas)
   valor: '', data: '',
+  // dano material no modo "conversão em empréstimo" (RMC/RCC, método 1 do CJ)
+  modo: 'restituicao', valorEmprestimo: '', dataEmprestimo: '', taxaContrato: '', saques: [],
 }
 
 const isMaterialTipo = (t) => t === 'dano_material'
+const isConversao = (v) => isMaterialTipo(v.tipo) && v.modo === 'conversao'
+
+// O que falta numa verba para gerar o cálculo ('' = pronta).
+function pendenciaVerba(v) {
+  const nome = TIPO_VERBA[v.tipo] || 'verba'
+  const parc = parcelasDaVerba(v)
+  if (!parc.length) {
+    return isMaterialTipo(v.tipo)
+      ? `A verba "${nome}" está sem parcelas — informe o total + período e clique em "Gerar parcelas mensais", ou lance os descontos manualmente.`
+      : `Informe o valor fixado e a data do arbitramento em "${nome}".`
+  }
+  if (!parc.every(p => p.data && parseValorBR(p.valor) > 0)) {
+    return isMaterialTipo(v.tipo) ? `Preencha data e valor de todas as parcelas em "${nome}".` : `Preencha valor e data em "${nome}".`
+  }
+  if (isConversao(v)) {
+    if (!(parseValorBR(v.valorEmprestimo) > 0)) return `Informe o valor do empréstimo recebido em "${nome}".`
+    if (!(parseValorBR(v.taxaContrato) > 0)) return `Informe a taxa de juros do contrato (% ao mês) em "${nome}".`
+    return ''
+  }
+  if (v.jurosTipo !== 'nenhum' && !v.jurosInicio) return `Defina "Juros a partir de" em "${nome}".`
+  return ''
+}
 
 // Parcelas efetivas de uma verba para o motor:
 //  - material: a tabela de descontos (cada um corrigido pela sua data)
@@ -371,7 +446,7 @@ function CompensacaoForm({ creditos, onChange, temMaterial }) {
         Saque ou TED do empréstimo que o cliente recebeu. É corrigido e recebe juros pelos mesmos critérios do dano material e abate <b>só do dano material</b> (nunca do moral).
       </p>
       {!temMaterial && creditos.length > 0 && (
-        <p style={{ margin: '0 0 8px', fontSize: 12, color: 'var(--warning)' }}>⚠️ Sem verba de dano material: a compensação não será abatida.</p>
+        <p style={{ margin: '0 0 8px', fontSize: 12, color: 'var(--warning)' }}>⚠️ Sem verba de dano material (restituição): a compensação não será abatida. Na conversão em empréstimo o valor recebido já entra no cálculo.</p>
       )}
       {creditos.map(c => (
         <div key={c.id} style={{ display: 'grid', gridTemplateColumns: '150px 140px 1fr auto', gap: 8, marginBottom: 8, alignItems: 'center' }}>
@@ -661,6 +736,10 @@ export default function NovoCalculo() {
         serie: series[v.indice], emDobro: isMaterialTipo(v.tipo) ? v.emDobro : false,
         juros: { tipo: v.jurosTipo, dataInicio: v.jurosInicio, serieSelic: series.SELIC, serieIpca: series.IPCA },
         parcelas: parcelasDaVerba(v).map(p => ({ data: p.data, valor: parseValorBR(p.valor) })),
+        ...(isConversao(v) && {
+          modo: 'conversao', valorEmprestimo: parseValorBR(v.valorEmprestimo), taxa: parseValorBR(v.taxaContrato),
+          dataEmprestimo: v.dataEmprestimo || '', saques: (v.saques || []).map(q => ({ data: q.data, valor: parseValorBR(q.valor) })),
+        }),
       }))
       const honPct = parseValorBR(d.honorariosPercentual)
       const creditos = (d.creditos || []).map(c => ({ data: c.data, valor: parseValorBR(c.valor), descricao: c.descricao }))
@@ -692,7 +771,7 @@ export default function NovoCalculo() {
     abriuRef.current = true
     const dc = c.dados_calculo || {}
     const verbas = (dc.verbas || []).map(v => {
-      const nv = { ...VERBA_DEFAULT, ...v, id: uid(), parcelas: (v.parcelas || []).map(p => ({ ...p, id: uid() })) }
+      const nv = { ...VERBA_DEFAULT, ...v, id: uid(), parcelas: (v.parcelas || []).map(p => ({ ...p, id: uid() })), saques: (v.saques || []).map(q => ({ ...q, id: uid() })) }
       // compat: registros antigos guardavam moral/honorários como 1 parcela
       if (!isMaterialTipo(nv.tipo) && !nv.valor && (v.parcelas || [])[0]) {
         nv.valor = v.parcelas[0].valor
@@ -712,10 +791,7 @@ export default function NovoCalculo() {
       art523: dc.art523 || { multa: false, honorarios: false },
     }
     setDados(d)
-    const completo = verbas.length > 0 && verbas.every(v => {
-      const parc = parcelasDaVerba(v)
-      return parc.length > 0 && parc.every(p => p.data && parseValorBR(p.valor) > 0) && (v.jurosTipo === 'nenhum' || v.jurosInicio)
-    })
+    const completo = verbas.length > 0 && verbas.every(v => !pendenciaVerba(v))
     setStep(3)                                       // mostra as verbas enquanto calcula
     if (completo) gerarRelatorios(d, { salvar: false })
   }, [location.state])
@@ -725,17 +801,8 @@ export default function NovoCalculo() {
     if (step !== 3) return ''
     if (!dados.verbas.length) return 'Adicione ao menos uma verba.'
     for (const v of dados.verbas) {
-      const nome = TIPO_VERBA[v.tipo] || 'verba'
-      const parc = parcelasDaVerba(v)
-      if (!parc.length) {
-        return isMaterialTipo(v.tipo)
-          ? `A verba "${nome}" está sem parcelas — informe o total + período e clique em "Gerar parcelas mensais", ou lance os descontos manualmente.`
-          : `Informe o valor fixado e a data do arbitramento em "${nome}".`
-      }
-      if (!parc.every(p => p.data && parseValorBR(p.valor) > 0)) {
-        return isMaterialTipo(v.tipo) ? `Preencha data e valor de todas as parcelas em "${nome}".` : `Preencha valor e data em "${nome}".`
-      }
-      if (v.jurosTipo !== 'nenhum' && !v.jurosInicio) return `Defina "Juros a partir de" em "${nome}".`
+      const m = pendenciaVerba(v)
+      if (m) return m
     }
     return ''
   }
@@ -743,12 +810,7 @@ export default function NovoCalculo() {
   function canNext() {
     if (step === 1) return dados.cliente.trim() && dados.executada.trim()
     if (step === 2) return dados.dataDecisao && dados.termoFinal
-    if (step === 3) return dados.verbas.length > 0 && dados.verbas.every(v => {
-      const parc = parcelasDaVerba(v)
-      return parc.length > 0 &&
-        parc.every(p => p.data && parseValorBR(p.valor) > 0) &&
-        (v.jurosTipo === 'nenhum' || v.jurosInicio)
-    })
+    if (step === 3) return dados.verbas.length > 0 && dados.verbas.every(v => !pendenciaVerba(v))
     return true
   }
 
@@ -1016,7 +1078,7 @@ export default function NovoCalculo() {
             <Art523Form valor={dados.art523 || {}} onChange={a => upd('art523', a)} />
 
             <CompensacaoForm creditos={dados.creditos || []} onChange={cs => upd('creditos', cs)}
-              temMaterial={dados.verbas.some(v => isMaterialTipo(v.tipo))} />
+              temMaterial={dados.verbas.some(v => isMaterialTipo(v.tipo) && !isConversao(v))} />
           </div>
         )}
 

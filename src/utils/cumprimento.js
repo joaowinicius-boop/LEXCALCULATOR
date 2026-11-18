@@ -2,7 +2,7 @@
  * cumprimento.js — gera a petição de Cumprimento de Sentença (modelo Nicolas Gomes),
  * consolidando os valores já calculados (proc) em HTML pronto para Word/impressão.
  */
-import { fmtBRL, fmtData } from './calcularJuridico.js'
+import { fmtBRL, fmtData, fmtPct } from './calcularJuridico.js'
 import { DECLARACAO_TJDFT } from '../data/textosRelatorio.js'
 
 const ESCRITORIO = {
@@ -60,11 +60,24 @@ export function fraseArt523(a) {
   return `Não havendo pagamento voluntário no prazo, acrescem-se ${itens.join(' e ')}, nos termos do art. 523, §1º, do CPC, incidentes sobre os débitos atualizados, totalizando ${fmtBRL(a.totalComMulta)} (${valorExtenso(a.totalComMulta)}).`
 }
 
+// Frase da conversão em empréstimo (RMC/RCC, método 1), usada no HTML e no .docx.
+export function fraseConversao(conv, tipoDoc) {
+  if (!conv.length) return ''
+  const soma = (k) => conv.reduce((a, x) => a + x.resultado[k], 0)
+  const taxas = [...new Set(conv.map(x => fmtPct(x.resultado.taxa)))].join(' e ')
+  const partes = [`Conforme ${tipoDoc}, o cartão de crédito consignado foi convertido em empréstimo consignado, à taxa de ${taxas} ao mês, com os descontos realizados amortizando o valor efetivamente recebido (${fmtBRL(soma('valorEmprestimo'))}).`]
+  if (soma('aRestituir') > 0.005) partes.push(`Recalculado o contrato, apurou-se pagamento a maior de ${fmtBRL(soma('aRestituir'))}, a ser restituído à parte Exequente.`)
+  if (soma('saldoDevedor') > 0.005) partes.push(`Recalculado o contrato, apurou-se saldo devedor remanescente de ${fmtBRL(soma('saldoDevedor'))}, não havendo valores a restituir a esse título.`)
+  if (partes.length === 1) partes.push('Recalculado o contrato, os descontos quitaram integralmente o empréstimo.')
+  return partes.join(' ')
+}
+
 // ─── Petição ────────────────────────────────────────────────────────────────────
 export function gerarCumprimentoHtml(meta = {}, proc, opts = {}) {
   const esc_ = ESCRITORIO
   const moral = proc.resultados.filter(r => r.verba.tipo === 'dano_moral')
-  const material = proc.resultados.filter(r => r.verba.tipo === 'dano_material')
+  const material = proc.resultados.filter(r => r.verba.tipo === 'dano_material' && r.verba.modo !== 'conversao')
+  const conv = proc.resultados.filter(r => r.verba.modo === 'conversao')
   const tipoDoc = (meta.tipoDocumento === 'acordao') ? 'acórdão' : 'sentença'
 
   const sumSub = (arr) => arr.reduce((a, r) => a + r.resultado.subtotal, 0)
@@ -89,7 +102,7 @@ export function gerarCumprimentoHtml(meta = {}, proc, opts = {}) {
     ? `Conforme ${tipoDoc}, a parte Executada foi condenada a <b>ressarcir em dobro</b>, a título de danos materiais, os valores indevidamente descontados da parte Exequente, devidamente atualizados.`
     : ''
   const descMoral = moral.length
-    ? `${material.length ? 'Quanto aos' : 'Conforme ' + tipoDoc + ', no que tange aos'} danos morais, estes foram fixados e atualizados conforme planilha anexa.`
+    ? `${material.length || conv.length ? 'Quanto aos' : 'Conforme ' + tipoDoc + ', no que tange aos'} danos morais, estes foram fixados e atualizados conforme planilha anexa.`
     : ''
   const descHon = honorarios > 0
     ? `Os honorários advocatícios sucumbenciais foram arbitrados em ${(proc.honorariosPercentual || 0).toLocaleString('pt-BR')}% sobre o valor da condenação, ora atualizados.`
@@ -108,7 +121,7 @@ export function gerarCumprimentoHtml(meta = {}, proc, opts = {}) {
   <p style="text-indent:2cm"><b>${esc(meta.cliente || '____________')}</b>, já qualificado(a) nos autos do processo em epígrafe, por intermédio de seu advogado que esta subscreve, vem, respeitosamente, à presença de Vossa Excelência, considerando o trânsito em julgado, requerer o <b>CUMPRIMENTO DE SENTENÇA</b>, nos termos do art. 523 do CPC, em desfavor de <b>${esc(meta.executada || '____________')}</b>, pelos fundamentos a seguir.</p>
 
   <p class="b">I. DOS CÁLCULOS DA EXECUÇÃO</p>
-  <p style="text-indent:2cm">${descMaterial} ${descComp} ${descMoral} ${descHon}</p>
+  <p style="text-indent:2cm">${descMaterial} ${descComp} ${fraseConversao(conv, tipoDoc)} ${descMoral} ${descHon}</p>
   <p style="text-indent:2cm">Assim, apresenta-se a planilha de débitos, atualizada até ${fmtData(proc.termoFinal)}, calculada com índices oficiais (IBGE/Banco Central):</p>
 
   <table>
