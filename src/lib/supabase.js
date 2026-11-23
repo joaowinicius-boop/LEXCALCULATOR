@@ -1,8 +1,8 @@
 import { createClient } from '@supabase/supabase-js'
 
-// Backend próprio do Lex: projeto Supabase LEXCALCULATOR.
-export const SUPABASE_URL  = 'https://gnebvpqmaxxyzuxjrjid.supabase.co'
-export const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImduZWJ2cHFtYXh4eXp1eGpyamlkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODA0MDgzOTMsImV4cCI6MjA5NTk4NDM5M30.M8dmapsz-Qi83G4W_N8UHQN6sttuayLzVyA6QCbhy9U'
+// Backend do Lex: projeto Supabase "LexCalculator" da organização LexGroup (migrado em 23/11/2026).
+export const SUPABASE_URL  = 'https://zdfvykmhddritwqjrnvi.supabase.co'
+export const SUPABASE_ANON = 'sb_publishable_i427tan1KDU2wUe9ZHDwuQ_tYdUm7wJ'
 
 export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON, {
   auth: {

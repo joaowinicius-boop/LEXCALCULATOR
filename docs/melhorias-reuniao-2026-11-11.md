@@ -1,7 +1,7 @@
 # Melhorias pedidas — reunião de 11/11/2026
 
 Fontes: áudio da reunião (só a 1ª metade foi gravada) + papel anotado na reunião.
-Atualizado em 18/11/2026.
+Atualizado em 23/11/2026.
 
 | # | Melhoria | O que foi pedido | Status | Tamanho |
 |---|---|---|---|---|
@@ -13,7 +13,7 @@ Atualizado em 18/11/2026.
 | 6 | Descontar só do material | Compensação/amortização abatem só do dano material, nunca do moral. | Feito para a compensação (#4). | — |
 | 7 | Mapear o Cálculo Jurídico | Ver as telas de compensação/amortização do CJ para copiar a metodologia (como a correção, validada com erro zero). Acesso: login do Dr. Nicolas Gomes ou acesso temporário do Victor. | **Feito** (16/11): ver `docs/calculo-juridico-mapa.md`. Faltam as decisões da seção 6 do mapa. | Pré-requisito de 4 e 5 |
 | 8 | Leitura de documentos com Gemini | Trocar a IA do modo Automático de OpenAI para Gemini (API liberada no e-mail corporativo). | **Feito** (a2dbc29, 16/11): `gemini-3.1-flash-lite` com fallback `gemini-3.8-flash`, `GEMINI_API_KEY` na Vercel, testado no ar. Login da leitura validado no Supabase (75d0b1e). Chave no **plano gratuito** do projeto AI Studio "Lex Calculator": falta a empresa vincular faturamento (LGPD + cota). | Médio |
-| 9 | Banco na conta da RA | Sublíder tech do NG: banco deve ficar na conta Supabase da RA, não no plano gratuito do João. Pedido: projeto "LexCalculator" numa organização da RA, João como Administrator. Depois Claude clona o LEXCALCULATOR (tabelas, RLS, funções, usuário, cálculos) e troca o endereço no app. | Aguardando a RA criar o projeto (ticket do João). | Médio |
+| 9 | Banco na conta da RA | Sublíder tech do NG: banco deve ficar na conta Supabase da RA, não no plano gratuito do João. Pedido: projeto "LexCalculator" numa organização da RA, João como Administrator. Depois Claude clona o LEXCALCULATOR (tabelas, RLS, funções, usuário, cálculos) e troca o endereço no app. | **Feito** (23/11): projeto "LexCalculator" na organização LexGroup [Desenvolvimento] (zdfvykmhddritwqjrnvi). Estrutura, RLS, funções, usuário (mesma senha) e cálculos copiados pelo SQL Editor; app aponta para ele. Edge function `indices` virou `api/indices.js` na Vercel. Banco antigo (gnebvpqmaxxyzuxjrjid) intacto como reserva. João é membro, não admin (não dá para ligar o conector nem publicar edge functions). | Médio |
 
 ## Dúvidas em aberto
 

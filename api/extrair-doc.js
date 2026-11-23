@@ -3,24 +3,13 @@
 // (só no ambiente do servidor — nunca no código). Exige usuário autenticado
 // (JWT do Supabase no header Authorization) e limita tamanho/quantidade de docs.
 
-import { SUPABASE_URL, SUPABASE_ANON } from "../src/lib/supabase.js"
+import { usuarioLogado } from "./_auth.js"
 
 export const config = { maxDuration: 60 }
 
 // flash-lite: estável e rápido (~5 s) nos testes de 16/11/2026; os flash maiores davam 503
 // ou ~50 s. GEMINI_MODEL na Vercel troca o principal sem mexer no código.
 const MODELOS = [process.env.GEMINI_MODEL || "gemini-3.1-flash-lite", "gemini-3.8-flash"]
-
-// Pergunta ao próprio Supabase Auth se o token é de um usuário logado de verdade
-// (confere assinatura e expiração). Antes só líamos o payload, e um token forjado passava.
-async function usuarioLogado(req) {
-  const tok = (req.headers.authorization || "").replace(/^Bearer\s+/i, "")
-  if (!tok) return false
-  try {
-    const r = await fetch(`${SUPABASE_URL}/auth/v1/user`, { headers: { apikey: SUPABASE_ANON, Authorization: `Bearer ${tok}` } })
-    return r.ok && !!(await r.json())?.id
-  } catch { return false }
-}
 
 const SYSTEM = `Você é um extrator de dados de petições e decisões judiciais brasileiras para CUMPRIMENTO DE SENTENÇA. Leia os documentos e chame a função registrar_calculo.
 

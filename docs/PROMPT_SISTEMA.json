@@ -10,7 +10,7 @@
 
   "stack": {
     "frontend": "React 19 + Vite 6 (SPA), lucide-react para ícones, sem framework CSS (estilos inline + CSS vars)",
-    "backend": "Supabase — projeto ref gnebvpqmaxxyzuxjrjid (auth por e-mail/senha, Postgres com RLS, 3 Edge Functions em Deno)",
+    "backend": "Supabase — projeto LexCalculator da LexGroup, ref zdfvykmhddritwqjrnvi (auth por e-mail/senha, Postgres com RLS); índices do BACEN e leitura por IA em funções da Vercel (api/)",
     "deploy": "Vercel, projeto 'lexcalculator' (awlegaltech-5909s-projects), produção https://lexcalculator.vercel.app, deploy automático no push para main",
     "repo": "https://github.com/joaowinicius-boop/LEXCALCULATOR (branch main)",
     "ia": "OpenAI gpt-4o com leitura nativa de PDF + function calling forçado (NÃO usar Anthropic — decisão do dono)",
