@@ -1,20 +1,23 @@
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext.jsx'
+import TicketCentral, { LimiteErro } from './TicketCentral.jsx'
 import {
   LayoutDashboard, Calculator, ClipboardList,
-  LogOut, Scale, ChevronRight, Bell, Search
+  LogOut, Scale, ChevronRight, Bell, Search, LifeBuoy
 } from 'lucide-react'
 
 const NAV = [
   { path: '/',          icon: LayoutDashboard, label: 'Dashboard'    },
   { path: '/novo',      icon: Calculator,      label: 'Novo Cálculo' },
   { path: '/historico', icon: ClipboardList,   label: 'Histórico'    },
+  { path: '/tickets',   icon: LifeBuoy,        label: 'Tickets'      },
 ]
 
 const PAGE_TITLES = {
   '/':          'Dashboard',
   '/novo':      'Novo Cálculo',
   '/historico': 'Histórico',
+  '/tickets':   'Tickets',
 }
 
 export default function Layout({ children }) {
@@ -246,8 +249,9 @@ export default function Layout({ children }) {
 
         {/* Scrollable content */}
         <main style={{ flex: 1, overflowY: 'auto', minHeight: 0 }}>
-          {children}
+          <LimiteErro key={location.pathname}>{children}</LimiteErro>
         </main>
+        <TicketCentral />
       </div>
     </div>
   )

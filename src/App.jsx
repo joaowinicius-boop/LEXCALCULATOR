@@ -4,6 +4,7 @@ import Login from './pages/Login.jsx'
 import Dashboard from './pages/Dashboard.jsx'
 import NovoCalculo from './pages/NovoCalculo.jsx'
 import Historico from './pages/Historico.jsx'
+import Tickets from './pages/Tickets.jsx'
 import Layout from './components/Layout.jsx'
 
 function PrivateRoute({ children }) {
@@ -29,6 +30,11 @@ function AppRoutes() {
       <Route path="/historico" element={
         <PrivateRoute>
           <Layout><Historico /></Layout>
+        </PrivateRoute>
+      } />
+      <Route path="/tickets" element={
+        <PrivateRoute>
+          <Layout><Tickets /></Layout>
         </PrivateRoute>
       } />
       <Route path="*" element={<Navigate to="/" replace />} />

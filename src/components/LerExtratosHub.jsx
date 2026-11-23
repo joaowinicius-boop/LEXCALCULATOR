@@ -4,6 +4,7 @@ import {
   CheckCircle2, ArrowRightLeft, FileSpreadsheet, Trash2,
 } from 'lucide-react'
 import { analisarExtratos } from '../utils/extrato.js'
+import { ReportarErro } from './TicketCentral.jsx'
 import { exportarTabelaXlsx } from '../utils/planilha.js'
 import { fmtBRL, parseValorBR } from '../utils/calcularJuridico.js'
 
@@ -153,7 +154,7 @@ export default function LerExtratosHub({ onUsar }) {
     return (
       <div>
         <div style={{ padding: '10px 14px', background: 'var(--error-bg)', border: '1px solid var(--error-border)', borderRadius: 8, color: 'var(--error)', fontSize: 13, display: 'flex', gap: 8 }}>
-          <AlertCircle size={15} style={{ flexShrink: 0, marginTop: 1 }} />{erro}
+          <AlertCircle size={15} style={{ flexShrink: 0, marginTop: 1 }} /><span>{erro} <ReportarErro erro={erro} /></span>
         </div>
         <button className="btn-secondary" style={{ marginTop: 14 }} onClick={() => setFase('upload')}>Voltar</button>
       </div>

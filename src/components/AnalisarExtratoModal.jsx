@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { Upload, Loader2, X, CheckCircle2, AlertCircle, Search } from 'lucide-react'
 import { analisarExtratos } from '../utils/extrato.js'
+import { ReportarErro } from './TicketCentral.jsx'
 import { fmtBRL } from '../utils/calcularJuridico.js'
 
 /**
@@ -94,7 +95,7 @@ export default function AnalisarExtratoModal({ descricaoVerba = '', onUsar, onCl
 
           {fase === 'erro' && (
             <div style={{ padding: '10px 14px', background: 'var(--error-bg)', border: '1px solid var(--error-border)', borderRadius: 8, color: 'var(--error)', fontSize: 13, display: 'flex', gap: 8 }}>
-              <AlertCircle size={15} style={{ flexShrink: 0, marginTop: 1 }} />{erro}
+              <AlertCircle size={15} style={{ flexShrink: 0, marginTop: 1 }} /><span>{erro} <ReportarErro erro={erro} /></span>
             </div>
           )}
 

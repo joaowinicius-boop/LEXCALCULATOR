@@ -14,6 +14,8 @@ import { carregarSeries } from '../lib/indices.js'
 import { calcularProcesso, fmtBRL, fmtData, parseValorBR } from '../utils/calcularJuridico.js'
 import { useCalculos } from '../hooks/useCalculos.js'
 import Relatorio from './Relatorio.jsx'
+import { ReportarErro } from '../components/TicketCentral.jsx'
+import { definirContextoTicket } from '../lib/tickets.js'
 
 let _id = 1
 const uid = () => String(_id++)
@@ -796,6 +798,10 @@ export default function NovoCalculo() {
     if (completo) gerarRelatorios(d, { salvar: false })
   }, [location.state])
 
+  // Ticket aberto durante o cálculo leva o passo e os dados preenchidos (para reproduzir)
+  useEffect(() => { definirContextoTicket({ passo: step, calculo: dados }) }, [step, dados])
+  useEffect(() => () => definirContextoTicket({}), [])
+
   // Explica por que o "Gerar relatórios" está bloqueado (passo 3)
   function motivoBloqueioStep3() {
     if (step !== 3) return ''
@@ -922,7 +928,7 @@ export default function NovoCalculo() {
 
             {extraiErr && (
               <div style={{ marginTop: '12px', padding: '10px 14px', background: 'var(--error-bg)', border: '1px solid var(--error-border)', borderRadius: '8px', color: 'var(--error)', fontSize: 13, display: 'flex', gap: 8 }}>
-                <AlertCircle size={15} style={{ flexShrink: 0, marginTop: 1 }} />{extraiErr}
+                <AlertCircle size={15} style={{ flexShrink: 0, marginTop: 1 }} /><span>{extraiErr} <ReportarErro erro={extraiErr} /></span>
               </div>
             )}
 
@@ -1084,7 +1090,7 @@ export default function NovoCalculo() {
 
         {saveErr && (
           <div style={{ marginTop: 16, padding: '10px 14px', background: 'var(--error-bg)', border: '1px solid var(--error-border)', borderRadius: '8px', color: 'var(--error)', fontSize: 13, display: 'flex', gap: 8 }}>
-            <AlertCircle size={15} style={{ flexShrink: 0, marginTop: 1 }} />{saveErr}
+            <AlertCircle size={15} style={{ flexShrink: 0, marginTop: 1 }} /><span>{saveErr} <ReportarErro erro={saveErr} /></span>
           </div>
         )}
 
