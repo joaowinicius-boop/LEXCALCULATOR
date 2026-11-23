@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
-import { LifeBuoy, Loader2, RefreshCw } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
+import { LifeBuoy, Loader2, RefreshCw, FolderOpen } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext.jsx'
 import { NOME_TIPO, STATUS_TICKET, abrirTicket, linksAnexos, listarTickets, responderTicket } from '../lib/tickets.js'
 
@@ -65,7 +66,20 @@ export default function Tickets() {
   )
 }
 
+// A tentativa de cálculo guardada no ticket, no formato que o NovoCalculo reabre (o mesmo do Histórico).
+function calculoDoTicket(ctx) {
+  const d = ctx.calculo
+  return {
+    id: ctx.calculoId || undefined,
+    processo: d.processo, cliente: d.cliente, executada: d.executada, vara: d.vara,
+    tipo_documento: d.tipoDocumento, data_decisao: d.dataDecisao, data_transito: d.dataTransito,
+    data_citacao: d.dataCitacao, data_ajuizamento: d.dataAjuizamento, observacoes: d.observacoes,
+    dados_calculo: { verbas: d.verbas || [], termoFinal: d.termoFinal, honorariosPercentual: d.honorariosPercentual, creditos: d.creditos || [], art523: d.art523 },
+  }
+}
+
 function TicketCard({ t, links, admin, onSalvo }) {
+  const navigate = useNavigate()
   const [status, setStatus] = useState(t.status)
   const [resposta, setResposta] = useState(t.resposta || '')
   const [salvando, setSalvando] = useState(false)
@@ -86,6 +100,18 @@ function TicketCard({ t, links, admin, onSalvo }) {
         <span style={{ fontSize: 12, color: 'hsl(var(--muted-foreground))' }}>{fmtQuando(t.created_at)}{t.autor ? ` · ${t.autor}` : ''}</span>
       </div>
 
+      {ctx.calculo && (
+        <div style={{ marginTop: 10, padding: '8px 12px', background: 'hsl(var(--secondary))', borderRadius: 8, display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap', fontSize: 12.5 }}>
+          <span style={{ flex: 1, minWidth: 200 }}>
+            <strong>Cálculo em andamento:</strong> {ctx.calculo.cliente || 'sem cliente'}{ctx.calculo.processo ? ` · ${ctx.calculo.processo}` : ''}{ctx.calculo.executada ? ` × ${ctx.calculo.executada}` : ''}
+            {` · passo ${ctx.passo || '—'} · ${(ctx.calculo.verbas || []).length} verba(s)`}{ctx.calculoId ? ' · já salvo no histórico' : ''}
+          </span>
+          <button className="btn-secondary" style={{ fontSize: 12, padding: '4px 10px' }} onClick={() => navigate('/novo', { state: { abrir: calculoDoTicket(ctx) } })}
+            title="Abre a tentativa exatamente como estava quando o ticket foi aberto (não grava nada novo)">
+            <FolderOpen size={13} /> Abrir este cálculo
+          </button>
+        </div>
+      )}
       {ctx.erro && <p style={{ margin: '10px 0 0', fontSize: 12.5, color: 'var(--error)' }}>Erro: {ctx.erro}</p>}
       {t.descricao && <p style={{ margin: '10px 0 0', fontSize: 14, whiteSpace: 'pre-wrap' }}>{t.descricao}</p>}
 

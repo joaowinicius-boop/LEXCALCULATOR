@@ -504,6 +504,7 @@ export default function NovoCalculo() {
   const navigate = useNavigate()
   const { salvarCalculo } = useCalculos()
   const [step, setStep] = useState(1)
+  const [calculoId, setCalculoId] = useState(null)   // registro salvo desta tentativa (vai no ticket)
   const [saving, setSaving] = useState(false)
   const [saveErr, setSaveErr] = useState('')
   const [proc, setProc] = useState(null)
@@ -752,7 +753,7 @@ export default function NovoCalculo() {
       setGeradoEm(`${agora.toLocaleDateString('pt-BR')}, às ${agora.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}`)
 
       if (salvar) {
-        try { await salvarCalculo(d, d.verbas, resultado.totalGeral, { termoFinal, honorariosPercentual: honPct, creditos: d.creditos || [], art523: d.art523 }) } catch (e) { console.warn('Falha ao salvar:', e) }
+        try { const salvo = await salvarCalculo(d, d.verbas, resultado.totalGeral, { termoFinal, honorariosPercentual: honPct, creditos: d.creditos || [], art523: d.art523 }); setCalculoId(salvo?.id || null) } catch (e) { console.warn('Falha ao salvar:', e) }
       }
       setStep(4)
     } catch (e) {
@@ -771,6 +772,7 @@ export default function NovoCalculo() {
     const c = location.state?.abrir
     if (!c || abriuRef.current) return
     abriuRef.current = true
+    setCalculoId(c.id || null)
     const dc = c.dados_calculo || {}
     const verbas = (dc.verbas || []).map(v => {
       const nv = { ...VERBA_DEFAULT, ...v, id: uid(), parcelas: (v.parcelas || []).map(p => ({ ...p, id: uid() })), saques: (v.saques || []).map(q => ({ ...q, id: uid() })) }
@@ -799,7 +801,7 @@ export default function NovoCalculo() {
   }, [location.state])
 
   // Ticket aberto durante o cálculo leva o passo e os dados preenchidos (para reproduzir)
-  useEffect(() => { definirContextoTicket({ passo: step, calculo: dados }) }, [step, dados])
+  useEffect(() => { definirContextoTicket({ passo: step, calculo: dados, calculoId }) }, [step, dados, calculoId])
   useEffect(() => () => definirContextoTicket({}), [])
 
   // Explica por que o "Gerar relatórios" está bloqueado (passo 3)
@@ -821,6 +823,7 @@ export default function NovoCalculo() {
   }
 
   function reset() {
+    setCalculoId(null)
     setProc(null); setExtracao(null); setDispositivo('')
     setDados({ processo: '', cliente: '', executada: '', vara: '', tipoDocumento: 'sentenca', dataDecisao: '', dataTransito: '', dataCitacao: '', dataAjuizamento: '', termoFinal: hoje, observacoes: '', verbas: [], creditos: [], art523: { multa: false, honorarios: false } })
     setStep(1)
