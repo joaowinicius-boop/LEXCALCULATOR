@@ -1,7 +1,7 @@
 // Checagem do motor (node scripts/teste-calculo.mjs): compensação, art. 523 e RMC/RCC método 1.
 // Série fictícia de 1% ao mês nos casos de compensação/523.
 import assert from 'node:assert/strict'
-import { calcularProcesso, calcularConversaoEmprestimo } from '../src/utils/calcularJuridico.js'
+import { calcularProcesso, calcularConversaoEmprestimo, mesesJuros } from '../src/utils/calcularJuridico.js'
 
 const serie = {}
 for (let a = 2023; a <= 2025; a++) for (let m = 1; m <= 12; m++) serie[`${a}-${String(m).padStart(2, '0')}`] = 1
@@ -73,4 +73,10 @@ quase(procConv.compensacao.compensado, 0)
 quase(procConv.resultados[0].resultado.subtotal, neg.aRestituir)
 quase(procConv.totalGeral, (neg.aRestituir + procConv.resultados[1].resultado.subtotal) * 1.1)
 
-console.log('compensação, art. 523 e RMC método 1 ok')
+// Juros pro rata die (casos do CJ): meses completos + dias restantes / 30.
+quase(mesesJuros('2022-12-01', '2025-06-25'), 30.8)
+quase(mesesJuros('2025-02-19', '2026-11-16'), 20 + 28 / 30)
+quase(mesesJuros('2024-01-31', '2024-02-29'), 1)       // fim de mês: 31/01 + 1 mês = 29/02
+quase(mesesJuros('2024-01-01', '2025-01-01'), 12)
+
+console.log('juros pro rata, compensação, art. 523 e RMC método 1 ok')

@@ -20,3 +20,12 @@ Atualizado em 23/11/2026.
 - **"Ligar com o Bacen"**: provavelmente a taxa média do consignado que o CJ sugere na Revisão RMC (ver mapa, seção 2). Série SGS exata a confirmar.
 - **Tickets**: quem responde além da conta do Dr. Nicolas (dar `lex_admin` a outra conta) e se precisa de aviso por e-mail/WhatsApp quando abrir ticket.
 - Edge function `extrair-doc` no Supabase ainda usa OpenAI, mas o app não a chama (usa `/api/extrair-doc` da Vercel). Pode ser apagada quando migrar o banco.
+
+## Respostas da execução (24/11/2026)
+
+1. **Juros**: contar ao pé da letra desde a data fixada (em geral a citação). Lex passou a contar **pro rata die** (meses completos + dias restantes / 30, como o CJ). Cálculos já feitos ficam como estão; refaz só se forem impugnados.
+2. **Saque maior que o material**: confirmado, não abate do moral nem dos honorários (já é assim).
+3. **Método 2, mês da virada**: em aberto (vai discutir com o Pablo).
+4. **Dobro**: sempre desde o início do dano material, sem marco do Tema 929 (já é assim).
+5. **Taxa do Bacen**: vai mostrar como o CJ sugere e procurar a fonte.
+6. **Mais usados**: métodos 1 e 2. Método 3 fica por último.

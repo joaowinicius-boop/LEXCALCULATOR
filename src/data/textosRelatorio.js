@@ -5,7 +5,7 @@
  */
 
 export const LABEL_JUROS = {
-  fixo_1: 'Fixos de 1% ao mês',
+  fixo_1: 'Fixos de 1% ao mês, pro rata die',
   taxa_legal: 'Taxa legal',
   selic: 'SELIC',
   nenhum: 'Não aplicado',

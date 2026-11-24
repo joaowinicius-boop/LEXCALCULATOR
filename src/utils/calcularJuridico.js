@@ -57,13 +57,22 @@ function nextMonthKey(key) {
   return `${a}-${String(m).padStart(2, '0')}`
 }
 
-/** Meses inteiros (completados) entre duas datas, sem pro-rata. */
-export function mesesInteiros(inicio, fim) {
+/**
+ * Meses de juros entre duas datas, pro rata die (como o CJ): meses completos desde o dia exato
+ * de início + dias que sobram / 30. Ex.: 01/12/2022 → 25/06/2025 = 30 + 24/30 = 30,8.
+ * Decisão da execução (24/11/2026): juros contados ao pé da letra desde a data fixada.
+ */
+export function mesesJuros(inicio, fim) {
   const a = parseISO(inicio), b = parseISO(fim)
   if (b <= a) return 0
+  // aniversário de n meses depois do início (31/01 + 1 mês = 28 ou 29/02)
+  const aniversario = (n) => new Date(a.getFullYear(), a.getMonth() + n,
+    Math.min(a.getDate(), new Date(a.getFullYear(), a.getMonth() + n + 1, 0).getDate()))
   let meses = (b.getFullYear() - a.getFullYear()) * 12 + (b.getMonth() - a.getMonth())
-  if (b.getDate() < a.getDate()) meses -= 1
-  return Math.max(0, meses)
+  if (aniversario(meses) > b) meses -= 1
+  const marco = aniversario(meses)
+  const dias = Math.round((b - marco) / 86400000)
+  return Math.max(0, meses + dias / 30)
 }
 
 // ─── Correção ───────────────────────────────────────────────────────────────
@@ -135,7 +144,7 @@ export function percentualJuros(juros, termoFinal) {
     // Segmento antigo (1% a.m.): de `ini` até o marco (ou até o termo, se anterior).
     if (ini < MARCO_LEI_14905) {
       const fimAntigo = fim < MARCO_LEI_14905 ? fim : MARCO_LEI_14905
-      pct += mesesInteiros(ini, fimAntigo) * 1
+      pct += mesesJuros(ini, fimAntigo) * 1
     }
     // Segmento novo (SELIC − IPCA): do marco (ou de `ini`, se posterior) até o termo.
     if (fim >= MARCO_LEI_14905) {
@@ -148,7 +157,7 @@ export function percentualJuros(juros, termoFinal) {
   }
   // fixo_1 (1% a.m.) ou taxa mensal customizada, juros simples
   const taxa = juros.taxaMensal ?? 1
-  return mesesInteiros(juros.dataInicio, termoFinal) * taxa
+  return mesesJuros(juros.dataInicio, termoFinal) * taxa
 }
 
 // ─── Cálculo por verba ────────────────────────────────────────────────────────
