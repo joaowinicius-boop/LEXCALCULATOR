@@ -34,6 +34,13 @@ const JUROS_OPCOES = [
 ]
 
 // ─── Helpers visuais ─────────────────────────────────────────────────────────
+// Documentos do modo Automático: os três são obrigatórios para liberar a análise.
+const DOCS_AUTO = [
+  { v: 'planilha', l: 'Planilha de descontos', hint: '.xlsx, .xls ou .csv da pasta do cliente (descontos exatos)', accept: '.xlsx,.xls,.csv' },
+  { v: 'inicial', l: 'Petição inicial', hint: 'PDF ou imagem', accept: '.pdf,image/*' },
+  { v: 'decisao', l: 'Sentença / Acórdão', hint: 'PDF ou imagem; se houve recurso, anexe os dois', accept: '.pdf,image/*' },
+]
+
 function Field({ label, required, children, hint }) {
   return (
     <div>
@@ -517,7 +524,9 @@ export default function NovoCalculo() {
 
   // ── Modo automático (IA lê documentos) ──
   const [modo, setModo] = useState('manual')        // 'manual' | 'auto'
-  const [arquivos, setArquivos] = useState([])      // File[]
+  const [docsAuto, setDocsAuto] = useState({ planilha: [], inicial: [], decisao: [] })  // File[] por vaga
+  const arquivos = [...docsAuto.planilha, ...docsAuto.inicial, ...docsAuto.decisao]
+  const docsCompletos = DOCS_AUTO.every(d => docsAuto[d.v].length > 0)
   const [extraindo, setExtraindo] = useState(false)
   const [extraiErr, setExtraiErr] = useState('')
   const [prog, setProg] = useState(0)            // progresso da análise (0–100)
@@ -672,7 +681,7 @@ export default function NovoCalculo() {
   }
 
   async function extrairComIA() {
-    if (!arquivos.length) return
+    if (!docsCompletos) return
     setExtraiErr(''); setExtraindo(true); setProg(6); setProgMsg('Preparando documentos…')
     const tick = setInterval(() => setProg(p => Math.min(93, p + Math.random() * 6 + 1.5)), 600)
     try {
@@ -892,42 +901,45 @@ export default function NovoCalculo() {
         {/* STEP 1 — AUTOMÁTICO (upload de documentos) */}
         {step === 1 && modo === 'auto' && (
           <div>
-            <Section badge="IA" eyebrow="EXTRAÇÃO AUTOMÁTICA" title="Enviar Documentos" desc="Anexe a PLANILHA de cálculo (.xlsx) da pasta do cliente + a petição inicial + a sentença/acórdão. A planilha dá os descontos exatos; a IA cuida do resto." />
-            <label style={{
-              display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-              gap: '8px', padding: '28px', border: '2px dashed hsl(var(--border))', borderRadius: '12px',
-              cursor: 'pointer', background: 'hsl(var(--secondary))', textAlign: 'center',
-            }}>
-              <Upload size={26} style={{ color: 'hsl(var(--primary))' }} />
-              <span style={{ fontSize: '14px', fontWeight: 600, color: 'hsl(var(--foreground))' }}>Clique para selecionar a planilha, PDFs ou imagens</span>
-              <span style={{ fontSize: '12px', color: 'hsl(var(--muted-foreground))' }}>Planilha (.xlsx/.xls/.csv) · Petição inicial · Sentença/Acórdão</span>
-              <input type="file" multiple accept=".pdf,.xlsx,.xls,.csv,image/*" style={{ display: 'none' }}
-                onChange={e => {
-                  const novos = Array.from(e.target.files || [])
-                  e.target.value = ''
-                  setExtraiErr('')
-                  // Limites (espelham o servidor): 5 arquivos, 10MB por PDF/imagem, 5MB por planilha
-                  for (const f of novos) {
-                    const limite = isPlanilha(f) ? 5 * 1024 * 1024 : 10 * 1024 * 1024
-                    if (f.size > limite) { setExtraiErr(`"${f.name}" tem ${(f.size / 1024 / 1024).toFixed(1)} MB — o limite é ${isPlanilha(f) ? 5 : 10} MB. Envie um arquivo menor.`); return }
-                  }
-                  if (arquivos.length + novos.length > 5) { setExtraiErr('Máximo de 5 arquivos por extração — envie só a planilha, a inicial e a decisão.'); return }
-                  setArquivos([...arquivos, ...novos])
-                }} />
-            </label>
-
-            {arquivos.length > 0 && (
-              <div style={{ marginTop: '12px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                {arquivos.map((f, i) => (
-                  <div key={i} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '8px 12px', background: 'hsl(var(--secondary))', border: '1px solid hsl(var(--border))', borderRadius: '8px', fontSize: '13px' }}>
-                    <span style={{ display: 'flex', alignItems: 'center', gap: '8px', color: 'hsl(var(--foreground))' }}>
-                      <FileText size={14} color="hsl(var(--primary))" /> {f.name} <span style={{ color: 'hsl(var(--muted-foreground))' }}>({(f.size / 1024).toFixed(0)} KB)</span>
-                    </span>
-                    <button onClick={() => setArquivos(arquivos.filter((_, j) => j !== i))} className="btn-danger" style={{ padding: '3px 6px' }}><X size={12} /></button>
+            <Section badge="IA" eyebrow="EXTRAÇÃO AUTOMÁTICA" title="Enviar Documentos" desc="Os três documentos abaixo são necessários. Quando todos ficarem verdes, a análise é liberada." />
+            <div style={{ display: 'flex', flexDirection: 'column', gap: '10px' }}>
+              {DOCS_AUTO.map(d => {
+                const lista = docsAuto[d.v]
+                const ok = lista.length > 0
+                return (
+                  <div key={d.v} style={{ display: 'flex', alignItems: 'center', gap: '12px', padding: '12px 14px', background: 'hsl(var(--secondary))', border: `1px solid ${ok ? 'var(--success-border)' : 'hsl(var(--border))'}`, borderRadius: '10px' }}>
+                    <span aria-hidden style={{ width: 12, height: 12, borderRadius: 999, flexShrink: 0, background: ok ? '#22c55e' : '#ef4444', boxShadow: `0 0 8px ${ok ? '#22c55e88' : '#ef444488'}` }} />
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <p style={{ margin: 0, fontSize: '14px', fontWeight: 600, color: 'hsl(var(--foreground))' }}>{d.l} <span style={{ fontSize: '12px', fontWeight: 400, color: ok ? 'var(--success)' : 'var(--error)' }}>{ok ? '· anexado' : '· falta'}</span></p>
+                      {ok ? lista.map((f, i) => (
+                        <span key={i} style={{ display: 'inline-flex', alignItems: 'center', gap: 6, marginTop: 4, marginRight: 8, fontSize: '12px', color: 'hsl(var(--muted-foreground))' }}>
+                          <FileText size={12} color="hsl(var(--primary))" /> {f.name} ({(f.size / 1024).toFixed(0)} KB)
+                          <button aria-label={`Remover ${f.name}`} onClick={() => setDocsAuto(a => ({ ...a, [d.v]: a[d.v].filter((_, j) => j !== i) }))} className="btn-danger" style={{ padding: '1px 4px' }}><X size={11} /></button>
+                        </span>
+                      )) : <p style={{ margin: '2px 0 0', fontSize: '12px', color: 'hsl(var(--muted-foreground))' }}>{d.hint}</p>}
+                    </div>
+                    <label className="btn-secondary" style={{ cursor: 'pointer', fontSize: '12.5px', padding: '6px 12px', flexShrink: 0 }}>
+                      <Upload size={13} /> {ok ? 'Trocar' : 'Anexar'}
+                      <input type="file" multiple={d.v === 'decisao'} accept={d.accept} style={{ display: 'none' }}
+                        onChange={e => {
+                          const novos = Array.from(e.target.files || [])
+                          e.target.value = ''
+                          if (!novos.length) return
+                          setExtraiErr('')
+                          // Limites (espelham o servidor): 5 arquivos, 10MB por PDF/imagem, 5MB por planilha
+                          for (const f of novos) {
+                            if (d.v === 'planilha' ? !isPlanilha(f) : isPlanilha(f)) { setExtraiErr(`"${f.name}" não é ${d.v === 'planilha' ? 'uma planilha (.xlsx/.xls/.csv)' : 'PDF ou imagem'}.`); return }
+                            const limite = isPlanilha(f) ? 5 * 1024 * 1024 : 10 * 1024 * 1024
+                            if (f.size > limite) { setExtraiErr(`"${f.name}" tem ${(f.size / 1024 / 1024).toFixed(1)} MB — o limite é ${isPlanilha(f) ? 5 : 10} MB. Envie um arquivo menor.`); return }
+                          }
+                          if (arquivos.length - lista.length + novos.length > 5) { setExtraiErr('Máximo de 5 arquivos por extração — envie só a planilha, a inicial e a decisão.'); return }
+                          setDocsAuto(a => ({ ...a, [d.v]: novos }))
+                        }} />
+                    </label>
                   </div>
-                ))}
-              </div>
-            )}
+                )
+              })}
+            </div>
 
             {extraiErr && (
               <div style={{ marginTop: '12px', padding: '10px 14px', background: 'var(--error-bg)', border: '1px solid var(--error-border)', borderRadius: '8px', color: 'var(--error)', fontSize: 13, display: 'flex', gap: 8 }}>
@@ -935,8 +947,9 @@ export default function NovoCalculo() {
               </div>
             )}
 
-            <button className="btn-primary" onClick={extrairComIA} disabled={!arquivos.length || extraindo}
-              style={{ marginTop: '16px', height: '44px', fontSize: '14px', width: '100%', justifyContent: 'center', opacity: (!arquivos.length || extraindo) ? 0.5 : 1 }}>
+            <button className="btn-primary" onClick={extrairComIA} disabled={!docsCompletos || extraindo}
+              title={docsCompletos ? undefined : 'Anexe os três documentos para liberar a análise'}
+              style={{ marginTop: '16px', height: '44px', fontSize: '14px', width: '100%', justifyContent: 'center', opacity: (!docsCompletos || extraindo) ? 0.5 : 1 }}>
               {extraindo ? <><Loader2 size={16} style={{ animation: 'spin 1s linear infinite' }} /> Analisando…</> : <><Bot size={16} /> Extrair tudo com IA</>}
             </button>
 
@@ -954,7 +967,7 @@ export default function NovoCalculo() {
               </div>
             ) : (
               <p style={{ margin: '10px 0 0', fontSize: '12px', color: 'hsl(var(--muted-foreground))', textAlign: 'center' }}>
-                A planilha (.xlsx) dá os descontos exatos; a IA preenche processo, datas e verbas. Você revisa antes de calcular.
+                {docsCompletos ? 'A planilha dá os descontos exatos; a IA preenche processo, datas e verbas. Você revisa antes de calcular.' : `Falta anexar: ${DOCS_AUTO.filter(d => !docsAuto[d.v].length).map(d => d.l).join(', ')}.`}
               </p>
             )}
           </div>
